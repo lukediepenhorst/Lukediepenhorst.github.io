@@ -626,8 +626,9 @@ export function createCrew(scene, office, bots, options) {
         { node: home, pose: "sit", seconds: rand(4.5, 9) },
       ];
     } else if (roll < 0.92) {
+      const spot = Math.random() < 0.5 ? "lb-wait" : "ex-view";
       bot.queue = [
-        { node: "lb-wait", pose: "stand", seconds: rand(2.4, 4.5) },
+        { node: spot, pose: "stand", seconds: rand(2.4, 4.5) },
         { node: home, pose: "sit", seconds: rand(4.5, 8) },
       ];
     } else {

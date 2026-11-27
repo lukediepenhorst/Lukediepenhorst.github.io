@@ -50,6 +50,7 @@
       <p class="sub"><span id="floor-count">Nine bots</span><span id="updated"></span></p>
     </div>
     <div class="controls">
+      <button type="button" id="btn-time" aria-pressed="false">Night</button>
       <button type="button" id="btn-reset">Reset view</button>
       <button type="button" id="btn-follow" hidden aria-pressed="false">Stop following</button>
       <button type="button" id="btn-labels" aria-pressed="true">Names</button>
@@ -57,6 +58,7 @@
     </div>
   </header>
   <p id="hint" class="hint">Drag to look · pinch or scroll to zoom · tap a bot</p>
+  <p id="intro-skip" class="hint intro-skip" hidden>Tap to skip</p>
   <div id="loading" class="loading" role="status">
     <div class="spinner" aria-hidden="true"></div>
     <p>Opening the office…</p>

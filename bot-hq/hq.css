@@ -203,6 +203,10 @@ h1 {
 
 .hint.is-gone { opacity: 0; }
 
+.intro-skip {
+  bottom: calc(58px + var(--safe-bottom));
+}
+
 .loading,
 .fallback {
   position: fixed;
