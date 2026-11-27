@@ -34,6 +34,18 @@ const SIT = {
 
 const PAPER = new THREE.Color("#e7cb8c");
 
+const HOME_FLOOR = {
+  "opportunity-scout": 41,
+  "personal-shopper": 41,
+  "money-manager": 41,
+  "chief-of-staff": 42,
+  "inbox-manager": 42,
+  texts: 42,
+  "business-lab": 43,
+  "content-coach": 43,
+  "goal-tracker": 43,
+};
+
 function turnToward(current, target, dt) {
   let delta = target - current;
   while (delta > Math.PI) delta -= Math.PI * 2;
@@ -400,11 +412,16 @@ export function createCrew(scene, office, bots, options) {
     pelvis.add(torso);
 
     const head = new THREE.Group();
-    head.position.y = HIP_Y + 0.56;
+    head.position.y = HIP_Y + 0.58;
     const headMesh = new THREE.Mesh(geos.head, mat);
     const eyes = new THREE.Mesh(geos.eye, eyeMat);
-    eyes.position.set(0, 0.02, 0.16);
-    head.add(headMesh, eyes);
+    eyes.position.set(0, 0.04, 0.16);
+    const mouth = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.025, 0.01),
+      new THREE.MeshBasicMaterial({ color: 0x1c1612 })
+    );
+    mouth.position.set(0, -0.07, 0.16);
+    head.add(headMesh, eyes, mouth);
     pelvis.add(head);
     const prop = propFor(info.id, info.accent);
     const propOnHead = info.id === "business-lab" || info.id === "opportunity-scout" || info.id === "texts";
@@ -530,6 +547,11 @@ export function createCrew(scene, office, bots, options) {
       greetYaw: 0,
       greetCool: 0,
       phrase: "",
+      eyes: eyes,
+      mouth: mouth,
+      nod: 0,
+      homeFloor: HOME_FLOOR[info.id] || 42,
+      parked: false,
     };
     crew.push(bot);
   });
@@ -974,6 +996,10 @@ export function createCrew(scene, office, bots, options) {
       elR = -0.25;
       shL = -0.35;
       elL = -0.5;
+    } else if (pose === "thumb") {
+      shR = -1.6;
+      elR = -0.15;
+      shL = -0.2;
     } else if (pose === "play") {
       const swingArm = Math.sin(t * 6 + bot.phase0);
       shR = -0.9 + swingArm * 0.8;
@@ -1041,8 +1067,23 @@ export function createCrew(scene, office, bots, options) {
         lookX = Math.sin(t * 2.4 + bot.phase0) * 0.05;
       }
     }
+    if (bot.nod > 0) {
+      lookX = Math.sin(t * 7) * 0.35;
+      bot.nod = Math.max(0, bot.nod - dt);
+    }
     bot.head.rotation.y += (lookY - bot.head.rotation.y) * Math.min(1, dt * 4);
     bot.head.rotation.x += (lookX - bot.head.rotation.x) * Math.min(1, dt * 4);
+    if (bot.eyes && !reduce) {
+      const blink = Math.sin(t * 0.85 + bot.phase0) > 0.96 ? 0.12 : 1;
+      bot.eyes.scale.y = blink;
+      bot.eyes.position.x = Math.sin(t * 0.35 + bot.phase0) * 0.03;
+    }
+    if (bot.mouth) {
+      const happy = bot.status === "Done" || bot.wave > 0 || pose === "celebrate";
+      const focused = bot.status === "Working";
+      bot.mouth.scale.x = happy ? 1.25 : focused ? 0.55 : 0.8;
+      bot.mouth.position.y = happy ? -0.055 : -0.075;
+    }
 
     if (bot.badge && !reduce) {
       const pulse = 1 + 0.08 * Math.sin(t * 3 + bot.phase0);
@@ -1110,6 +1151,13 @@ export function createCrew(scene, office, bots, options) {
     phraseSprites.forEach((sprite) => { sprite.visible = false; });
     for (let i = 0; i < crew.length; i += 1) {
       const bot = crew[i];
+      if (!bot.group.visible) {
+        shadowDummy.position.set(0, -20, 0);
+        shadowDummy.scale.set(0.01, 0.01, 1);
+        shadowDummy.updateMatrix();
+        shadowMesh.setMatrixAt(i, shadowDummy.matrix);
+        continue;
+      }
       if (bot.mode === "walk") stepWalk(bot, dt);
       else stepAct(bot, dt);
       applyPose(bot, t, dt);
@@ -1143,15 +1191,55 @@ export function createCrew(scene, office, bots, options) {
 
   const BOARD = { x0: 1.2, z0: -7.8, x1: 9.6, z1: -2.6 };
 
-  function setVisible(on) {
-    groupVisible = on;
-    crew.forEach((bot) => { bot.group.visible = on; });
-    ball.visible = on;
-    shadowMesh.visible = on;
-    if (!on) {
+  let activeFloor = 42;
+
+  function setActiveFloor(id, stations) {
+    activeFloor = id;
+    crew.forEach((bot) => {
+      const here = bot.homeFloor === id;
+      bot.group.visible = here;
+      if (!here) return;
+      if (id === 42) {
+        if (bot.parked) {
+          bot.parked = false;
+          standAt(bot, bot.seatId, "sit", 5);
+        }
+        return;
+      }
+      const spot = stations && stations[bot.id];
+      if (!spot) return;
+      bot.parked = true;
+      bot.x = spot.x;
+      bot.z = spot.z;
+      bot.path = [];
+      bot.mode = "act";
+      bot.action = { pose: spot.pose, seconds: 9999 };
+      bot.timer = 9999;
+      bot.face = spot.face;
+      bot.sit = spot.pose === "sit" ? 1 : 0;
+      bot.group.rotation.y = spot.face;
+      bot.group.position.set(spot.x, 0.035, spot.z);
+    });
+    const any = crew.some((bot) => bot.group.visible);
+    groupVisible = any;
+    ball.visible = id === 42;
+    shadowMesh.visible = any;
+    if (!any) {
       bubbles.forEach((sprite) => { sprite.visible = false; });
       phraseSprites.forEach((sprite) => { sprite.visible = false; });
     }
+  }
+
+  function setVisible(on) {
+    setActiveFloor(on ? 42 : 0, null);
+  }
+
+  function playTask(id) {
+    const bot = get(id);
+    if (!bot || !bot.group.visible) return;
+    bot.wave = 1.1;
+    bot.nod = 1.1;
+    bot.greetYaw = bot.group.rotation.y;
   }
 
   function greet(x, z, time) {
@@ -1163,6 +1251,7 @@ export function createCrew(scene, office, bots, options) {
       cheering = true;
       cheer = true;
       crew.forEach((bot) => {
+        if (!bot.group.visible) return;
         const inRoom = bot.x > BOARD.x0 && bot.x < BOARD.x1 && bot.z > BOARD.z0 && bot.z < BOARD.z1;
         if (!inRoom) return;
         bot.wave = 1.8;
@@ -1174,6 +1263,7 @@ export function createCrew(scene, office, bots, options) {
     }
     if (!inside) cheering = false;
     crew.forEach((bot, i) => {
+      if (!bot.group.visible) return;
       const dist = Math.hypot(bot.x - x, bot.z - z);
       if (dist < 2.5 && time > bot.greetCool) {
         bot.greetCool = time + 9;
@@ -1210,6 +1300,7 @@ export function createCrew(scene, office, bots, options) {
 
   // Pose once so the first painted frame is not a T-pose.
   update(0.016, 0.016);
+  setActiveFloor(42, null);
 
   return {
     bots: crew,
@@ -1217,6 +1308,8 @@ export function createCrew(scene, office, bots, options) {
     get: get,
     snapshot: snapshot,
     setVisible: setVisible,
+    setActiveFloor: setActiveFloor,
+    playTask: playTask,
     greet: greet,
     lastPhrase: function () { return lastPhrase; },
   };

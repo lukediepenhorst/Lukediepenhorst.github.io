@@ -86,12 +86,80 @@ a { touch-action: manipulation; }
   left: 0;
   right: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 8px 12px;
-  padding: calc(8px + var(--safe-top)) calc(12px + var(--safe-right)) 8px calc(12px + var(--safe-left));
-  background: linear-gradient(to bottom, rgba(28, 22, 18, 0.78), rgba(28, 22, 18, 0));
+  gap: 6px;
+  min-height: calc(48px + var(--safe-top));
+  padding: calc(6px + var(--safe-top)) calc(8px + var(--safe-right)) 6px calc(8px + var(--safe-left));
+  background: linear-gradient(to bottom, rgba(28, 22, 18, 0.88), rgba(28, 22, 18, 0));
   pointer-events: none;
+}
+
+.hud-chip,
+.floor-switch button,
+.menu-wrap > button {
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--hud);
+}
+
+.tod {
+  font-size: 0.72rem;
+  color: var(--muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.menu-wrap { position: relative; pointer-events: auto; }
+
+.hud-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 168px;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(20, 16, 12, 0.94);
+  border: 1px solid var(--line);
+  z-index: 20;
+}
+
+.hud-menu button { min-height: 40px; text-align: left; }
+
+.progress {
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--amber);
+}
+
+@media (max-width: 760px) {
+  .home-link { display: none; }
+  .tod { display: none; }
+  .brand-copy h1 { font-size: 0.78rem; }
+  .titles { flex: 0 1 92px; }
+  .brand-copy { max-width: 56px; }
+  .floor-switch { margin-left: auto; flex: 0 0 auto; }
+  .brand-copy h1 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tagline, .sub { display: none; }
+  .brand-mark .logo { width: 28px; height: 28px; }
+  .floor-switch button { min-width: 32px; padding: 0 6px; }
 }
 
 .topbar a,
@@ -106,7 +174,7 @@ a { touch-action: manipulation; }
   text-transform: uppercase;
 }
 
-.titles { min-width: 0; flex: 1 1 160px; }
+.titles { min-width: 0; flex: 1 1 auto; }
 
 .brand-lockup {
   display: flex;

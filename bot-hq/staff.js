@@ -20,8 +20,10 @@ const PEOPLE = [
   { floor: 41, x: -1.1, z: -4.15, sit: true, face: Math.PI },
   { floor: 41, x: 1.1, z: -4.15, sit: true, face: Math.PI },
   { floor: 41, x: 0, z: -6.5, sit: false, present: true, face: 0 },
-  { floor: 43, x: -5.2, z: 1.7, sit: true, face: 0 },
-  { floor: 43, x: 6.2, z: -5.6, sit: false, present: true, face: Math.PI },
+  { floor: 43, x: -6.2, z: 3.15, sit: true, face: Math.PI },
+  { floor: 43, x: 5.4, z: 1.6, sit: false, present: true, face: 0 },
+  { floor: 44, x: 4.2, z: 0.4, sit: true, face: Math.PI },
+  { floor: 44, x: -1.2, z: -3.4, sit: false, present: true, face: Math.PI },
 ];
 
 export function createStaff(scene) {
@@ -57,15 +59,14 @@ export function createStaff(scene) {
   const cheerRooms = {
     42: { x0: 1.2, z0: -7.8, x1: 9.6, z1: -2.6 },
     41: { x0: -3.2, z0: -7.2, x1: 3.2, z1: -3.4 },
-    43: { x0: 4.2, z0: -7.4, x1: 8.4, z1: -3.6 },
+    43: { x0: 4.4, z0: -7.2, x1: 8.6, z1: -3.6 },
+    44: { x0: 2.6, z0: 0.2, x1: 6.2, z1: 2.2 },
   };
   let cheering = false;
 
   function write(time) {
-    const visible = quality !== "low";
-    bodies.visible = visible;
-    heads.visible = visible;
-    if (!visible) return;
+    bodies.visible = true;
+    heads.visible = true;
     for (let i = 0; i < people.length; i += 1) {
       const p = people[i];
       const here = p.floor === shown;
@@ -98,7 +99,7 @@ export function createStaff(scene) {
     phrase = "";
     cheer = false;
     const step = dt || 0.016;
-    if (quality === "low" || floor !== shown) return { phrase: "", cheer: false };
+    if (floor !== shown) return { phrase: "", cheer: false };
     const room = cheerRooms[floor];
     const inside = room && x > room.x0 && x < room.x1 && z > room.z0 && z < room.z1;
     if (inside && !cheering) {

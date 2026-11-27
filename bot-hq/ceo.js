@@ -23,7 +23,17 @@ export function createCeo(scene) {
   const star = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.02), gold);
   star.position.set(0.12, 1.05, 0.13);
   star.rotation.z = Math.PI / 4;
-  group.add(torso, lapel, head, star);
+  const eyes = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.16, 0.045),
+    new THREE.MeshBasicMaterial({ color: 0xf4fbff })
+  );
+  eyes.position.set(0, 1.31, 0.15);
+  const mouth = new THREE.Mesh(
+    new THREE.BoxGeometry(0.09, 0.02, 0.01),
+    new THREE.MeshBasicMaterial({ color: 0x1c1612 })
+  );
+  mouth.position.set(0, 1.18, 0.15);
+  group.add(torso, lapel, head, star, eyes, mouth);
 
   const label = document.createElement("div");
   label.className = "bot-label";
@@ -77,7 +87,9 @@ export function createCeo(scene) {
       const step = Math.min(2.4 * dt, len);
       tryStep(blocked, state.x + nx * step, state.z + nz * step);
     }
-    const bob = len > 0.05 ? Math.abs(Math.sin(performance.now() * 0.01)) * 0.04 : 0;
+    const now = performance.now() * 0.001;
+    const bob = len > 0.05 ? Math.abs(Math.sin(now * 8)) * 0.04 : 0;
+    eyes.scale.y = Math.sin(now * 0.9) > 0.97 ? 0.15 : 1;
     group.position.set(state.x, bob, state.z);
     group.rotation.y = state.yaw;
     group.visible = true;
