@@ -276,6 +276,11 @@ function clockTexture() {
  */
 export function buildOffice(scene, bots, options) {
   const debug = !!(options && options.debug);
+  // Everything you can walk through lives on this group, so other floors can
+  // hide Floor 42 without hiding the skyline.
+  const interior = new THREE.Group();
+  interior.name = "floor-42";
+  scene.add(interior);
   const lit = [];
   const glow = [];
   const glass = [];
@@ -785,7 +790,7 @@ export function buildOffice(scene, bots, options) {
   poster.position.set(X0 + 0.16, 1.55, 4.4);
   poster.rotation.y = Math.PI / 2;
   poster.raycast = function () {};
-  scene.add(poster);
+  interior.add(poster);
   addBox(lit, C.trim, 0.04, 0.95, 0.95, X0 + 0.12, 1.55, 4.4);
 
   // Clock sits above the right end of the command wall.
@@ -794,7 +799,7 @@ export function buildOffice(scene, bots, options) {
     new THREE.MeshBasicMaterial({ map: clockTexture() })
   );
   clockFace.position.set(2.15, 2.05, NORTH_Z + T / 2 + 0.03);
-  scene.add(clockFace);
+  interior.add(clockFace);
   const clockHands = new THREE.Group();
   clockHands.position.copy(clockFace.position);
   clockHands.position.z += 0.02;
@@ -804,7 +809,7 @@ export function buildOffice(scene, bots, options) {
   const minuteHand = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.2, 0.01), handMat);
   minuteHand.geometry.translate(0, 0.08, 0);
   clockHands.add(hourHand, minuteHand);
-  scene.add(clockHands);
+  interior.add(clockHands);
 
   // --- lobby / reception ---------------------------------------------------
   // South of the main floor. The door lines up with the aisle at x = -2.5.
@@ -900,7 +905,7 @@ export function buildOffice(scene, bots, options) {
   const logoWall = new THREE.Mesh(new THREE.PlaneGeometry(2.45, 1.18), logoMat);
   logoWall.position.set(-6.45, 1.48, Z1 + 0.2);
   logoWall.raycast = function () {};
-  scene.add(logoWall);
+  interior.add(logoWall);
 
   // Emissive strips: ceilings, baseboards, and the boardroom glass line.
   // They share the glow mesh, so they do not add lights or draw calls.
@@ -1083,7 +1088,7 @@ export function buildOffice(scene, bots, options) {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), dashMat);
     mesh.position.set(x, y, z);
     mesh.raycast = function () {};
-    scene.add(mesh);
+    interior.add(mesh);
     addBox(lit, C.bezel, w + 0.1, h + 0.1, 0.05, x, y, z - 0.04);
     addBox(glow, BRAND.colors.amber, w + 0.16, 0.025, 0.02, x, y - h / 2 - 0.04, z);
   }
@@ -1136,7 +1141,7 @@ export function buildOffice(scene, bots, options) {
   artGeos.forEach((g) => g.dispose());
   const artMesh = new THREE.Mesh(artMerged, artMat);
   artMesh.raycast = function () {};
-  scene.add(artMesh);
+  interior.add(artMesh);
 
   // --- walking graph -------------------------------------------------------
 
@@ -1334,7 +1339,7 @@ export function buildOffice(scene, bots, options) {
     mesh.updateMatrix();
     // Clicks use invisible boxes on the bots, not the building.
     mesh.raycast = function () {};
-    scene.add(mesh);
+    interior.add(mesh);
     return mesh;
   }
 
@@ -1382,7 +1387,7 @@ export function buildOffice(scene, bots, options) {
     if (screenMesh.instanceColor) screenMesh.instanceColor.needsUpdate = true;
     screenMesh.frustumCulled = false;
     screenMesh.raycast = function () {};
-    scene.add(screenMesh);
+    interior.add(screenMesh);
   }
   merge(glass, glassMat);
   merge(panes, paneMat);
@@ -1408,10 +1413,10 @@ export function buildOffice(scene, bots, options) {
     ledMesh.instanceMatrix.needsUpdate = true;
     ledMesh.frustumCulled = false;
     ledMesh.raycast = function () {};
-    scene.add(ledMesh);
+    interior.add(ledMesh);
   }
 
-  if (debug) addDebug(scene, nodes, edgeList, pathErrors);
+  if (debug) addDebug(interior, nodes, edgeList, pathErrors);
 
   const towerTex = document.createElement("canvas");
   towerTex.width = 64;
@@ -1576,7 +1581,21 @@ export function buildOffice(scene, bots, options) {
   );
   floorSign.position.set(0.15, 1.55, LZ - 0.28);
   floorSign.raycast = function () {};
-  scene.add(floorSign);
+  interior.add(floorSign);
+
+  // Three clickable floor buttons beside the elevator. Only this floor's
+  // panel is pickable while Floor 42 is showing.
+  const elevatorButtons = [];
+  [43, 42, 41].forEach((level, i) => {
+    const button = new THREE.Mesh(
+      new THREE.BoxGeometry(0.28, 0.22, 0.04),
+      new THREE.MeshBasicMaterial({ color: level === 42 ? 0xffb15a : 0x2a313c })
+    );
+    button.position.set(-0.35, 1.55 - i * 0.28, LZ - 0.16);
+    button.userData.floor = level;
+    elevatorButtons.push(button);
+    interior.add(button);
+  });
 
   function setQuality(level) {
     qualityLevel = level;
@@ -1636,6 +1655,8 @@ export function buildOffice(scene, bots, options) {
     pathsOk: pathErrors.length === 0,
     pathErrors: pathErrors,
     pointBlocked: pointBlocked,
+    interior: interior,
+    elevatorButtons: elevatorButtons,
     screens: screens,
     update: update,
     setQuality: setQuality,

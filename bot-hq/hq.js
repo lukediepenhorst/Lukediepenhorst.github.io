@@ -2,7 +2,10 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
 import { buildOffice } from "./office.js";
+import { buildExtraFloors } from "./floors.js";
 import { createCrew } from "./actors.js";
+import { createStaff } from "./staff.js";
+import { createCeo } from "./ceo.js";
 import { applyBrandToPage } from "./brand.js";
 
 /*
@@ -153,6 +156,25 @@ function startScene(botInfos) {
     screen.speed = bot ? STATUS_SPEED[bot.status] || 1.6 : 1.6;
   });
   const crew = createCrew(scene, office, botInfos, { reduceMotion: reduce });
+  const extra = buildExtraFloors(scene);
+  const staff = createStaff(scene);
+  const ceo = createCeo(scene);
+  const floorPick = new THREE.Mesh(
+    new THREE.PlaneGeometry(40, 40),
+    new THREE.MeshBasicMaterial({ visible: false })
+  );
+  floorPick.rotation.x = -Math.PI / 2;
+  floorPick.position.y = 0.04;
+  scene.add(floorPick);
+  const confetti = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.07, 0.09, 0.02),
+    new THREE.MeshBasicMaterial({ color: 0xffb15a }),
+    16
+  );
+  confetti.frustumCulled = false;
+  confetti.raycast = function () {};
+  confetti.visible = false;
+  scene.add(confetti);
 
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.42, 0.54, 28),
@@ -232,6 +254,8 @@ function startScene(botInfos) {
 
   function resetView() {
     stopFollow();
+    if (ceoOn) stopCeo(true);
+    if (bird) setBird(false);
     const home = homeView();
     if (reduce) {
       frameHome();
@@ -273,6 +297,7 @@ function startScene(botInfos) {
       renderer.toneMappingExposure = 1.05;
     }
     office.setNight(night);
+    extra.setNight(night);
     if (timeButton) {
       timeButton.textContent = night ? "Day" : "Night";
       timeButton.setAttribute("aria-pressed", night ? "true" : "false");
@@ -353,6 +378,19 @@ function startScene(botInfos) {
       -((at.y - rect.top) / rect.height) * 2 + 1
     );
     raycaster.setFromCamera(pointerNdc, camera);
+    const pickRay = new THREE.Raycaster();
+    pickRay.setFromCamera(pointerNdc, camera);
+    if (ceoOn) {
+      const floorHits = pickRay.intersectObject(floorPick, false);
+      if (floorHits.length) ceo.goTo(floorHits[0].point.x, floorHits[0].point.z);
+      return;
+    }
+    const buttons = floorId === 42 ? office.elevatorButtons : extra.active(floorId) ? extra.active(floorId).elevatorButtons : [];
+    const panelHits = buttons.length ? pickRay.intersectObjects(buttons, false) : [];
+    if (panelHits.length && panelHits[0].object.userData.floor) {
+      setFloor(panelHits[0].object.userData.floor);
+      return;
+    }
     const hits = raycaster.intersectObjects(crew.bots.map((bot) => bot.group), true);
     if (!hits.length) return;
     let node = hits[0].object;
@@ -617,6 +655,204 @@ function startScene(botInfos) {
   let smoothTime = 0;
   const clock = new THREE.Clock();
   const followDelta = new THREE.Vector3();
+  let floorId = 42;
+  let floorBusy = false;
+  let ceoOn = false;
+  let bird = false;
+  let lastGreet = "";
+  let confettiT = 0;
+  const joy = { x: 0, y: 0 };
+  const held = {};
+  const floorCard = document.getElementById("elevator-card");
+  const birdButton = document.getElementById("btn-bird");
+  const ceoButton = document.getElementById("btn-ceo");
+  const exitButton = document.getElementById("btn-ceo-exit");
+  const joystick = document.getElementById("joystick");
+  const joystickKnob = document.getElementById("joystick-knob");
+  const confettiDummy = new THREE.Object3D();
+  const camGoal = new THREE.Vector3();
+  const lookGoal = new THREE.Vector3();
+
+  function blockedCell(x, z) {
+    if (floorId === 42) {
+      if (x < -9.6 || x > 9.6 || z < -7.6 || z > 12.7) return true;
+      return !!office.pointBlocked(x, z);
+    }
+    const floor = extra.active(floorId);
+    return floor ? !!floor.pointBlocked(x, z) : true;
+  }
+
+  function setFloor(id) {
+    const next = Number(id);
+    if (floorBusy || next === floorId || (next !== 41 && next !== 42 && next !== 43)) return;
+    floorBusy = true;
+    const names = { 41: "Sales floor", 42: "Luke's Bot HQ", 43: "Innovation lab" };
+    if (floorCard) {
+      floorCard.hidden = false;
+      floorCard.textContent = "Floor " + next + " · " + names[next];
+    }
+    window.setTimeout(() => {
+      floorId = next;
+      office.interior.visible = next === 42;
+      extra.show(next);
+      crew.setVisible(next === 42);
+      staff.show(next);
+      if (ceoOn) ceo.place(-1.2, 10.4);
+      document.querySelectorAll("#floor-switch button").forEach((button) => {
+        button.setAttribute("aria-pressed", Number(button.dataset.floor) === next ? "true" : "false");
+      });
+      floorBusy = false;
+      window.setTimeout(() => {
+        if (floorCard) floorCard.hidden = true;
+      }, 320);
+    }, 380);
+  }
+
+  function setBird(on) {
+    bird = on;
+    if (on) {
+      if (ceoOn) stopCeo();
+      if (tour || tourArm) stopTour();
+      camera.position.set(0.2, 26, 1.1);
+      controls.target.set(0, 0, 1);
+      camera.lookAt(controls.target);
+      controls.minPolarAngle = 0.02;
+      controls.maxPolarAngle = 0.32;
+    } else {
+      controls.minPolarAngle = 0.08;
+      controls.maxPolarAngle = Math.PI / 2 - 0.08;
+      frameHome();
+    }
+    if (birdButton) birdButton.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+
+  function syncCeoUi() {
+    if (ceoButton) ceoButton.setAttribute("aria-pressed", ceoOn ? "true" : "false");
+    if (exitButton) exitButton.hidden = !ceoOn;
+    if (joystick) joystick.hidden = !ceoOn;
+    document.body.classList.toggle("is-ceo", ceoOn);
+  }
+
+  function stopCeo(skipHome) {
+    if (!ceoOn) return;
+    ceoOn = false;
+    joy.x = 0;
+    joy.y = 0;
+    ceo.hide();
+    controls.enabled = true;
+    syncCeoUi();
+    if (!bird && !skipHome) frameHome();
+  }
+
+  function startCeo() {
+    if (intro) endIntro(false);
+    if (tour || tourArm) stopTour();
+    if (bird) setBird(false);
+    stopFollow();
+    ceoOn = true;
+    controls.enabled = false;
+    ceo.place(ceo.state.x, ceo.state.z);
+    ceo.group.visible = true;
+    syncCeoUi();
+  }
+
+  function stickWorld() {
+    let ix = joy.x;
+    let iy = joy.y;
+    if (held.KeyW || held.ArrowUp) iy += 1;
+    if (held.KeyS || held.ArrowDown) iy -= 1;
+    if (held.KeyD || held.ArrowRight) ix += 1;
+    if (held.KeyA || held.ArrowLeft) ix -= 1;
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    if (forward.lengthSq() < 1e-4) forward.set(0, 0, -1);
+    forward.normalize();
+    const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), forward);
+    return {
+      x: right.x * ix + forward.x * iy,
+      z: right.z * ix + forward.z * iy,
+    };
+  }
+
+  function burstConfetti() {
+    if (quality === "low") return;
+    confettiT = 1.15;
+    confetti.visible = true;
+  }
+
+  function stepConfetti(dt) {
+    if (confettiT <= 0) {
+      confetti.visible = false;
+      return;
+    }
+    confettiT -= dt;
+    const originX = ceo.state.x;
+    const originZ = ceo.state.z;
+    for (let i = 0; i < 16; i += 1) {
+      const age = 1.15 - confettiT;
+      const ang = (i / 16) * Math.PI * 2;
+      confettiDummy.position.set(
+        originX + Math.cos(ang) * (0.4 + age * 1.6),
+        1.4 + Math.sin(i) * 0.4 + age * 1.1 - age * age * 1.4,
+        originZ + Math.sin(ang) * (0.4 + age * 1.6)
+      );
+      confettiDummy.rotation.set(age * 4, ang, 0);
+      confettiDummy.updateMatrix();
+      confetti.setMatrixAt(i, confettiDummy.matrix);
+    }
+    confetti.instanceMatrix.needsUpdate = true;
+  }
+
+  document.querySelectorAll("#floor-switch button").forEach((button) => {
+    button.addEventListener("click", () => setFloor(button.dataset.floor));
+  });
+  if (birdButton) birdButton.addEventListener("click", () => setBird(!bird));
+  if (ceoButton) ceoButton.addEventListener("click", () => { if (ceoOn) stopCeo(); else startCeo(); });
+  if (exitButton) exitButton.addEventListener("click", () => stopCeo());
+  window.addEventListener("keydown", (event) => {
+    held[event.code] = true;
+    if (ceoOn && ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(event.code) >= 0) {
+      event.preventDefault();
+    }
+  });
+  window.addEventListener("keyup", (event) => { held[event.code] = false; });
+
+  function joyPoint(event) {
+    if (!joystick) return;
+    const rect = joystick.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    let dx = (event.clientX - cx) / (rect.width * 0.42);
+    let dy = -((event.clientY - cy) / (rect.height * 0.42));
+    const len = Math.hypot(dx, dy) || 1;
+    if (len > 1) { dx /= len; dy /= len; }
+    joy.x = dx;
+    joy.y = dy;
+    if (joystickKnob) joystickKnob.style.transform = "translate(" + (dx * 28) + "px, " + (-dy * 28) + "px)";
+  }
+  if (joystick) {
+    joystick.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+      joystick.setPointerCapture(event.pointerId);
+      joyPoint(event);
+    });
+    joystick.addEventListener("pointermove", (event) => {
+      if (!joystick.hasPointerCapture(event.pointerId)) return;
+      event.stopPropagation();
+      joyPoint(event);
+    });
+    const release = (event) => {
+      joy.x = 0;
+      joy.y = 0;
+      if (joystickKnob) joystickKnob.style.transform = "translate(0, 0)";
+      if (event) event.stopPropagation();
+    };
+    joystick.addEventListener("pointerup", release);
+    joystick.addEventListener("pointercancel", release);
+  }
+
   let announced = false;
   let frames = 0;
   let fpsAccum = 0;
@@ -640,17 +876,42 @@ function startScene(botInfos) {
       if (quality === "high" && slowTime > 1.6) {
         quality = "low";
         office.setQuality("low");
+        staff.setQuality("low");
         if (intro) endIntro(false);
         resize();
       } else if (quality === "low" && smoothTime > 2.5) {
         quality = "high";
         office.setQuality("high");
+        staff.setQuality("high");
         slowTime = 0;
         resize();
       }
     }
-    office.update(t);
-    crew.update(dt, t);
+    office.update(floorId === 42 ? t : 0);
+    if (floorId === 42) crew.update(dt, t);
+    staff.update(t);
+    if (ceoOn) {
+      const move = stickWorld();
+      ceo.update(dt, move, blockedCell);
+      const fromBots = floorId === 42 ? crew.greet(ceo.state.x, ceo.state.z, t) : { phrase: "", cheer: false };
+      const fromStaff = staff.greet(ceo.state.x, ceo.state.z, t, floorId, dt);
+      if (fromBots.phrase) lastGreet = fromBots.phrase;
+      if (fromStaff.phrase) lastGreet = fromStaff.phrase;
+      if (fromBots.cheer || fromStaff.cheer) burstConfetti();
+      stepConfetti(dt);
+      camGoal.set(
+        ceo.state.x - Math.sin(ceo.state.yaw) * 5.6,
+        4.6,
+        ceo.state.z - Math.cos(ceo.state.yaw) * 5.6
+      );
+      lookGoal.set(ceo.state.x, 1.05, ceo.state.z);
+      camera.position.lerp(camGoal, 0.18);
+      controls.target.lerp(lookGoal, 0.22);
+      camera.lookAt(controls.target);
+    } else {
+      stepConfetti(dt);
+    }
+    controls.enabled = !ceoOn;
 
     if (intro) {
       intro.t += Math.min(raw, 0.05);
@@ -705,9 +966,9 @@ function startScene(botInfos) {
       }
     }
 
-    if (!tween && !intro && !tour) controls.update();
+    if (!tween && !intro && !tour && !ceoOn && !bird) controls.update();
     // The opening shot and the tour look outside the orbit box.
-    if (!intro && !tour) clampTarget();
+    if (!intro && !tour && !ceoOn && !bird) clampTarget();
 
     const selected = window.BotHQ ? window.BotHQ.selectedId : null;
     const selectedBot = selected ? crew.get(selected) : null;
@@ -798,6 +1059,40 @@ function startScene(botInfos) {
     },
     isTour: function () {
       return !!tour;
+    },
+    floor: function () {
+      return floorId;
+    },
+    setFloor: function (id) {
+      setFloor(id);
+    },
+    bird: function (on) {
+      setBird(on !== false);
+      return bird;
+    },
+    isBird: function () {
+      return bird;
+    },
+    playCeo: function (on) {
+      if (on === false) stopCeo();
+      else startCeo();
+      return ceoOn;
+    },
+    isCeo: function () {
+      return ceoOn;
+    },
+    setStick: function (x, y) {
+      joy.x = x;
+      joy.y = y;
+    },
+    ceoPos: function () {
+      return { x: ceo.state.x, z: ceo.state.z, yaw: ceo.state.yaw };
+    },
+    placeCeo: function (x, z) {
+      ceo.place(x, z);
+    },
+    lastGreet: function () {
+      return lastGreet || crew.lastPhrase();
     },
     camera: function () {
       return {

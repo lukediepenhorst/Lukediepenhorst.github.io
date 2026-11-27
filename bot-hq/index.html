@@ -50,8 +50,16 @@
       <p class="sub"><span id="floor-count">Nine bots</span><span id="updated"></span></p>
     </div>
     <div class="controls">
+      <div class="floor-switch" id="floor-switch" role="group" aria-label="Elevator">
+        <button type="button" data-floor="43">43</button>
+        <button type="button" data-floor="42" aria-pressed="true">42</button>
+        <button type="button" data-floor="41">41</button>
+      </div>
       <button type="button" id="btn-time" aria-pressed="false">Night</button>
       <button type="button" id="btn-tour" aria-pressed="false">Tour</button>
+      <button type="button" id="btn-bird" aria-pressed="false">Bird's-eye</button>
+      <button type="button" id="btn-ceo" aria-pressed="false">Play as CEO</button>
+      <button type="button" id="btn-ceo-exit" hidden>Exit</button>
       <button type="button" id="btn-reset">Reset view</button>
       <button type="button" id="btn-follow" hidden aria-pressed="false">Stop following</button>
       <button type="button" id="btn-labels" aria-pressed="true">Names</button>
@@ -60,6 +68,10 @@
   </header>
   <p id="hint" class="hint">Drag to look · pinch or scroll to zoom · tap a bot</p>
   <p id="intro-skip" class="hint intro-skip" hidden>Tap to skip</p>
+  <p id="elevator-card" class="elevator-card" hidden>Floor 42</p>
+  <div id="joystick" class="joystick" hidden>
+    <div id="joystick-knob" class="joystick-knob"></div>
+  </div>
   <div id="loading" class="loading" role="status">
     <div class="spinner" aria-hidden="true"></div>
     <p>Opening the office…</p>
