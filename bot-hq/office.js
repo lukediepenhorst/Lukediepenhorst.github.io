@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { BRAND, drawLogo } from "./brand.js";
 
 /*
   Builds the office and the walking graph.
@@ -19,7 +20,9 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
           |  desks   desks   desks                 |
           |                               +--------+
           |                               | break  |
-    z=8   +-------------------------------+--------+
+    z=8   +----------- door --------------+--------+
+          |  LOBBY   reception   logo wall          |
+    z=13  +----------------------------------------+
 
   Bots only walk between named points (the graph below). Dotted hallways
   stay clear of desks. Add ?debug=1 to the page URL to see those paths.
@@ -276,6 +279,8 @@ export function buildOffice(scene, bots, options) {
   const lit = [];
   const glow = [];
   const glass = [];
+  const panes = [];
+  const signs = [];
   const shadows = [];
   const blocks = [];
   const leds = [];
@@ -362,6 +367,19 @@ export function buildOffice(scene, bots, options) {
     const w = Math.abs(x1 - x0);
     if (w < 0.02) return;
     addBox(lit, color || C.wall, w, WALL_H, T, (x0 + x1) / 2, WALL_H / 2, z);
+    block(name, x0, z - T / 2, x1, z + T / 2);
+  }
+
+  // A wall you can see through, but not walk through. The block stays solid.
+  function glassWallX(z, x0, x1, name) {
+    const w = Math.abs(x1 - x0);
+    if (w < 0.02) return;
+    const cx = (x0 + x1) / 2;
+    addBox(lit, C.wall, w, 0.85, T, cx, 0.42, z);
+    addBox(lit, C.trim, w, 0.16, T + 0.04, cx, 2.28, z);
+    addBox(lit, C.trim, 0.08, 1.3, T + 0.05, x0, 1.5, z);
+    addBox(lit, C.trim, 0.08, 1.3, T + 0.05, x1, 1.5, z);
+    addPlane(panes, w - 0.12, 1.2, cx, 1.5, z, 0);
     block(name, x0, z - T / 2, x1, z + T / 2);
   }
 
@@ -557,8 +575,8 @@ export function buildOffice(scene, bots, options) {
   // --- outdoors and floors -------------------------------------------------
 
   addBox(lit, C.grass, 70, 0.2, 70, 0, -0.2, 0);
-  addBox(lit, C.walk, 24.6, 0.08, 20.6, 0, -0.04, 0);
-  addBox(lit, C.wood, 20.3, 0.12, 16.3, 0, 0.02, 0);
+  addBox(lit, C.walk, 26, 0.08, 30, 0, -0.04, 2.2);
+  addBox(lit, BRAND.colors.concrete, 20.3, 0.12, 16.3, 0, 0.02, 0);
   // Room floors sit a hair above the wood so each room reads as its own material.
   addBox(lit, C.tileDark, 10.5, 0.025, 5.4, (X0 + SPLIT_X) / 2, 0.035, (Z0 + NORTH_Z) / 2);
   addBox(lit, C.carpet, 9.3, 0.025, 5.4, (SPLIT_X + X1) / 2, 0.035, (Z0 + NORTH_Z) / 2);
@@ -582,7 +600,8 @@ export function buildOffice(scene, bots, options) {
 
   const winY = { y0: 1.02, y1: 2.08 };
   block("outer-n", X0, Z0 - T / 2, X1, Z0 + T / 2);
-  block("outer-s", X0, Z1 - T / 2, X1, Z1 + T / 2);
+  block("outer-s-a", X0, Z1 - T / 2, -3.3, Z1 + T / 2);
+  block("outer-s-b", -1.7, Z1 - T / 2, X1, Z1 + T / 2);
   block("outer-w", X0 - T / 2, Z0, X0 + T / 2, Z1);
   block("outer-e", X1 - T / 2, Z0, X1 + T / 2, Z1);
 
@@ -590,10 +609,10 @@ export function buildOffice(scene, bots, options) {
     { x0: -8.7, x1: -3.4, ...winY },
     { x0: 1.8, x1: 8.4, ...winY },
   ]);
-  wallRunX(Z1, X0, X1, [
-    { x0: -7.4, x1: -1.2, ...winY },
-    { x0: 6.1, x1: 8.9, ...winY },
-  ]);
+  wallRunX(Z1, X0, -3.3, [{ x0: -8.2, x1: -4.4, ...winY }]);
+  wallRunX(Z1, -1.7, BREAK_X, []);
+  wallRunX(Z1, BREAK_X, X1, [{ x0: 6.1, x1: 8.9, ...winY }]);
+  doorX(Z1, -3.3, -1.7);
   // East/west visuals fit between the north and south walls so corners do not z-fight.
   wallRunZ(X0, Z0 + T / 2, Z1 - T / 2, [
     { z0: -6.7, z1: -3.6, ...winY },
@@ -606,7 +625,7 @@ export function buildOffice(scene, bots, options) {
 
   solidX(NORTH_Z, X0, REC_DOOR.x0, "wall-rec-w");
   solidX(NORTH_Z, REC_DOOR.x1, MEET_DOOR.x0, "wall-mid");
-  solidX(NORTH_Z, MEET_DOOR.x1, X1, "wall-meet-e");
+  glassWallX(NORTH_Z, MEET_DOOR.x1, X1, "wall-meet-e");
   doorX(NORTH_Z, REC_DOOR.x0, REC_DOOR.x1);
   doorX(NORTH_Z, MEET_DOOR.x0, MEET_DOOR.x1);
   solidZ(SPLIT_X, Z0, NORTH_Z, "wall-split");
@@ -765,6 +784,169 @@ export function buildOffice(scene, bots, options) {
   clockHands.add(hourHand, minuteHand);
   scene.add(clockHands);
 
+  // --- lobby / reception ---------------------------------------------------
+  // South of the main floor. The door lines up with the aisle at x = -2.5.
+
+  const LZ = 13.15;
+  const LX1 = 5;
+  addBox(lit, "#ddd4c8", 14.9, 0.06, 5.35, (X0 + LX1) / 2, 0.05, (Z1 + LZ) / 2);
+  addBox(lit, C.rug, 3.2, 0.02, 2.2, -6.4, 0.07, 11.3);
+  addBox(lit, "#e7d3b4", 2.4, 0.02, 1.6, 1.55, 0.07, 10.2);
+
+  block("lb-w", X0 - T / 2, Z1, X0 + T / 2, LZ);
+  block("lb-e", LX1 - T / 2, Z1, LX1 + T / 2, LZ);
+  block("lb-s", X0, LZ - T / 2, LX1, LZ + T / 2);
+  wallRunZ(X0, Z1 + T / 2, LZ - T / 2, [{ z0: 9.4, z1: 11.8, ...winY }]);
+  wallRunZ(LX1, Z1 + T / 2, LZ - T / 2, []);
+  wallRunX(LZ, X0 + T / 2, LX1 - T / 2, [{ x0: -7.2, x1: -2.2, ...winY }]);
+
+  // Reception desk. Kept east of the x = -2.5 hallway.
+  addBox(lit, C.desk, 1.7, 0.08, 0.62, 1.55, 0.78, 10.75);
+  [[-0.7, -0.22], [0.7, -0.22], [-0.7, 0.22], [0.7, 0.22]].forEach((p) => {
+    addBox(lit, C.woodDark, 0.07, 0.7, 0.07, 1.55 + p[0], 0.38, 10.75 + p[1]);
+  });
+  addBox(glow, BRAND.colors.amber, 1.55, 0.035, 0.03, 1.55, 0.74, 11.08);
+  addBox(lit, C.bezel, 0.46, 0.3, 0.04, 1.55, 1.08, 10.52);
+  addBox(glow, BRAND.colors.teal, 0.36, 0.2, 0.015, 1.55, 1.08, 10.55);
+  block("reception", 0.7, 10.44, 2.4, 11.06);
+  addShadow(1.55, 10.75, 1.8, 0.8);
+  addPlant(3.55, 12.45, 1.05, "plant-lb-e");
+  addPlant(-8.7, 12.45, 1.0, "plant-lb-w");
+  addPlant(-8.55, 9.15, 0.85, "plant-lb-door");
+  addChair(-7.3, 11.55, C.chair, "south");
+  addChair(-6.15, 11.85, C.chair, "south");
+  block("wait-a", -7.55, 11.3, -7.05, 11.85);
+  block("wait-b", -6.4, 11.6, -5.9, 12.15);
+  addLamp(-4.2, 11.6);
+  addLamp(1.5, 12.2);
+
+  // Warm and cool strips. They are unlit meshes, not real lights, so they stay cheap.
+  addBox(glow, BRAND.colors.amber, 7.5, 0.035, 0.04, -4.2, 2.34, NORTH_Z + 0.12);
+  addBox(glow, "#8fd4ea", 4.6, 0.035, 0.04, 7.2, 2.34, NORTH_Z + 0.12);
+  addBox(glow, BRAND.colors.amber, 4.2, 0.03, 0.03, -2.5, 2.34, Z1 - 0.12);
+
+  // Dark baseboards read as contact shadow where the wall meets the floor.
+  addBox(lit, "#b3aa9f", 20, 0.08, 0.06, 0, 0.06, Z0 + 0.14);
+  addBox(lit, "#b3aa9f", 0.06, 0.08, 15.6, X0 + 0.14, 0.06, 0);
+  addBox(lit, "#b3aa9f", 0.06, 0.08, 15.6, X1 - 0.14, 0.06, 0);
+
+  // --- signs (one texture, one draw) ---------------------------------------
+
+  const signCanvas = document.createElement("canvas");
+  signCanvas.width = 512;
+  signCanvas.height = 256;
+  const sctx = signCanvas.getContext("2d");
+  sctx.fillStyle = BRAND.colors.ink;
+  sctx.fillRect(0, 0, 512, 256);
+  drawLogo(sctx, 16, 16, 96);
+  sctx.fillStyle = BRAND.colors.cream;
+  sctx.font = "700 36px sans-serif";
+  sctx.fillText(BRAND.name, 128, 58);
+  sctx.fillStyle = BRAND.colors.amber;
+  sctx.font = "500 20px sans-serif";
+  sctx.fillText(BRAND.tagline, 128, 92);
+  const plaques = ["LOBBY", "RECORDS", "MEETING", "BREAK", "STUDIO"];
+  plaques.forEach((label, i) => {
+    const x = 16 + (i % 3) * 160;
+    const y = 140 + Math.floor(i / 3) * 52;
+    sctx.fillStyle = BRAND.colors.cream;
+    sctx.fillRect(x, y, 148, 40);
+    sctx.fillStyle = BRAND.colors.ink;
+    sctx.font = "700 16px sans-serif";
+    sctx.fillText(label, x + 12, y + 26);
+  });
+  const signTex = new THREE.CanvasTexture(signCanvas);
+  signTex.colorSpace = THREE.SRGBColorSpace;
+  signTex.needsUpdate = true;
+
+  function addSign(x, y, z, w, h, rotY, u0, v0, u1, v1) {
+    const g = new THREE.PlaneGeometry(w, h);
+    if (rotY) g.rotateY(rotY);
+    g.translate(x, y, z);
+    const uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i += 1) {
+      uv.setXY(i, u0 + uv.getX(i) * (u1 - u0), v0 + uv.getY(i) * (v1 - v0));
+    }
+    signs.push(g);
+  }
+
+  // Canvas y grows down; with flipY the top of the canvas is v = 1.
+  // Logo block occupies y 0–128 of 256, so v 0.5–1.
+  addSign(1.7, 1.55, Z1 + 0.14, 2.3, 1.15, 0, 0, 0.5, 0.72, 1);
+  // Plaques sit in y 140–232. v = 1 - y/256.
+  const plaqueV = [
+    [0.03, 0.45, 0.32, 0.30],
+    [0.34, 0.45, 0.63, 0.30],
+    [0.66, 0.45, 0.95, 0.30],
+    [0.03, 0.25, 0.32, 0.10],
+    [0.34, 0.25, 0.63, 0.10],
+  ];
+  // LOBBY, RECORDS, MEETING face +z. BREAK faces -x (into the office). STUDIO faces +z.
+  addSign(-4.15, 1.7, Z1 + 0.14, 0.7, 0.22, 0, plaqueV[0][0], plaqueV[0][3], plaqueV[0][2], plaqueV[0][1]);
+  addSign(-8.15, 1.7, NORTH_Z + 0.14, 0.78, 0.22, 0, plaqueV[1][0], plaqueV[1][3], plaqueV[1][2], plaqueV[1][1]);
+  addSign(6.4, 1.7, NORTH_Z + 0.14, 0.86, 0.22, 0, plaqueV[2][0], plaqueV[2][3], plaqueV[2][2], plaqueV[2][1]);
+  addSign(BREAK_X - 0.14, 1.7, 6.35, 0.62, 0.22, -Math.PI / 2, plaqueV[3][0], plaqueV[3][3], plaqueV[3][2], plaqueV[3][1]);
+  addSign(-4.2, 2.05, NORTH_Z + 0.14, 0.7, 0.22, 0, plaqueV[4][0], plaqueV[4][3], plaqueV[4][2], plaqueV[4][1]);
+
+  // Live-looking dashboards share one canvas so both screens are two draws, one texture.
+  const dashCanvas = document.createElement("canvas");
+  dashCanvas.width = 512;
+  dashCanvas.height = 256;
+  const dashCtx = dashCanvas.getContext("2d");
+  const dashTex = new THREE.CanvasTexture(dashCanvas);
+  dashTex.colorSpace = THREE.SRGBColorSpace;
+  const dashMat = new THREE.MeshBasicMaterial({ map: dashTex });
+  let dashEvery = 3;
+  let dashFrame = 0;
+
+  function drawDashboard(time) {
+    const ctx = dashCtx;
+    const w = dashCanvas.width;
+    const h = dashCanvas.height;
+    ctx.fillStyle = "#14181f";
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = BRAND.colors.amber;
+    ctx.fillRect(0, 0, w, 6);
+    ctx.fillStyle = BRAND.colors.cream;
+    ctx.font = "700 22px sans-serif";
+    ctx.fillText(BRAND.name, 16, 36);
+    ctx.font = "500 14px sans-serif";
+    ctx.fillStyle = "#9fb0c0";
+    ctx.fillText("FLOOR", 16, 58);
+    const bars = [0.45, 0.7, 0.35, 0.85, 0.55, 0.4, 0.75];
+    bars.forEach((base, i) => {
+      const wobble = 0.5 + 0.5 * Math.sin(time * 1.4 + i);
+      const bh = (0.35 + 0.65 * base * wobble) * 90;
+      ctx.fillStyle = i % 2 ? BRAND.colors.teal : BRAND.colors.amber;
+      ctx.fillRect(20 + i * 28, 170 - bh, 18, bh);
+    });
+    bots.forEach((bot, i) => {
+      const y = 28 + (i % 9) * 22;
+      ctx.fillStyle = bot.accent || BRAND.colors.amber;
+      ctx.beginPath();
+      ctx.arc(250, y, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#e7eef4";
+      ctx.font = "600 13px sans-serif";
+      ctx.fillText(bot.name, 266, y + 4);
+      ctx.fillStyle = "#9fb0c0";
+      ctx.font = "13px sans-serif";
+      ctx.fillText(bot.status, 400, y + 4);
+    });
+  }
+  drawDashboard(0);
+
+  function addDashboard(x, y, z, w, h, rotY) {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), dashMat);
+    mesh.position.set(x, y, z);
+    if (rotY) mesh.rotation.y = rotY;
+    mesh.raycast = function () {};
+    scene.add(mesh);
+    addBox(lit, C.bezel, w + 0.08, h + 0.08, 0.04, x, y, z - 0.03);
+  }
+  addDashboard(2.15, 1.45, NORTH_Z + 0.16, 1.35, 0.72, 0);
+  addDashboard(-6.2, 1.45, Z1 + 0.16, 1.2, 0.64, 0);
+
   // --- walking graph -------------------------------------------------------
 
   for (let ix = 0; ix < AX.length; ix += 1) {
@@ -849,6 +1031,15 @@ export function buildOffice(scene, bots, options) {
   link("ln-s", gid(3.6, AZ[1]));
   link("ln-mid", "ln-seat");
 
+  node("lb-door", -2.5, 8.55);
+  node("lb-mid", -2.5, 10.15);
+  node("lb-wait", -6.6, 10.4, Math.PI);
+  node("lb-logo", 0.35, 9.55, Math.PI);
+  link("lb-door", gid(-2.5, AZ[3]));
+  link("lb-door", "lb-mid");
+  link("lb-mid", "lb-wait");
+  link("lb-mid", "lb-logo");
+
   function pointBlocked(x, z) {
     for (let i = 0; i < blocks.length; i += 1) {
       const b = blocks[i];
@@ -905,7 +1096,7 @@ export function buildOffice(scene, bots, options) {
     return null;
   }
 
-  const spotIds = ["sv-files", "sv-rack", "cab-east", "br-hang", "br-coffee", "mt-north", "mt-s-mid", "ln-seat"];
+  const spotIds = ["sv-files", "sv-rack", "cab-east", "br-hang", "br-coffee", "mt-north", "mt-s-mid", "ln-seat", "lb-wait", "lb-logo"];
   Object.keys(desks).forEach((id) => {
     spotIds.push(desks[id].seat, desks[id].front);
   });
@@ -948,6 +1139,14 @@ export function buildOffice(scene, bots, options) {
     map: windowTexture(),
     side: THREE.DoubleSide,
   });
+  const paneMat = new THREE.MeshBasicMaterial({
+    color: 0xd5eef8,
+    transparent: true,
+    opacity: 0.38,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const signMat = new THREE.MeshBasicMaterial({ map: signTex });
   const shadowMat = new THREE.MeshBasicMaterial({
     map: shadowTexture(),
     transparent: true,
@@ -958,6 +1157,8 @@ export function buildOffice(scene, bots, options) {
   merge(lit, litMat);
   merge(glow, glowMat);
   merge(glass, glassMat);
+  merge(panes, paneMat);
+  merge(signs, signMat);
   merge(shadows, shadowMat);
 
   let ledMesh = null;
@@ -984,7 +1185,16 @@ export function buildOffice(scene, bots, options) {
 
   if (debug) addDebug(scene, nodes, edgeList, pathErrors);
 
+  function setQuality(level) {
+    dashEvery = level === "low" ? 12 : 3;
+  }
+
   function update(time) {
+    dashFrame += 1;
+    if (dashFrame % dashEvery === 0) {
+      drawDashboard(time);
+      dashTex.needsUpdate = true;
+    }
     for (let i = 0; i < screens.length; i += 1) {
       const s = screens[i];
       const pulse = 0.8 + 0.2 * Math.sin(time * s.speed + s.phase);
@@ -1016,6 +1226,7 @@ export function buildOffice(scene, bots, options) {
     pointBlocked: pointBlocked,
     screens: screens,
     update: update,
+    setQuality: setQuality,
     botRadius: BOT_R,
   };
 }

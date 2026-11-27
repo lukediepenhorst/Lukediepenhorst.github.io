@@ -17,6 +17,7 @@
   <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js" crossorigin>
   <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/renderers/CSS2DRenderer.js" crossorigin>
   <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/utils/BufferGeometryUtils.js" crossorigin>
+  <link rel="modulepreload" href="brand.js">
   <link rel="modulepreload" href="hq.js">
   <link rel="modulepreload" href="office.js">
   <link rel="modulepreload" href="actors.js">
@@ -39,7 +40,13 @@
   <header class="topbar">
     <a class="home-link" href="../">Projects</a>
     <div class="titles">
-      <h1>Luke's Bot HQ</h1>
+      <div class="brand-lockup">
+        <span id="brand-mark" class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <h1 id="brand-name">Luke's Bot HQ</h1>
+          <p id="brand-tagline" class="tagline">Nine bots. One office.</p>
+        </div>
+      </div>
       <p class="sub"><span id="floor-count">Nine bots</span><span id="updated"></span></p>
     </div>
     <div class="controls">
@@ -71,7 +78,7 @@
   <button id="scrim" class="scrim" type="button" hidden aria-label="Close details"></button>
   <aside id="panel" class="panel" role="dialog" aria-modal="true" aria-labelledby="panel-name" hidden>
     <div class="panel-top">
-      <p class="eyebrow">Bot</p>
+      <p class="eyebrow" id="panel-kicker">Luke's Bot HQ</p>
       <div class="panel-top-actions">
         <button type="button" id="panel-follow" class="close" hidden aria-pressed="false">Stop following</button>
         <button type="button" id="panel-close" class="close">Close</button>
@@ -79,6 +86,7 @@
     </div>
     <span class="panel-swatch" id="panel-swatch" aria-hidden="true"></span>
     <h2 id="panel-name"></h2>
+    <p class="panel-k">Role</p>
     <p id="panel-role" class="panel-role"></p>
     <p class="panel-status-line">
       <span class="panel-k">Status</span>

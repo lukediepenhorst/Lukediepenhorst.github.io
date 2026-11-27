@@ -108,12 +108,34 @@ a { touch-action: manipulation; }
 
 .titles { min-width: 0; flex: 1 1 160px; }
 
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-mark .logo {
+  width: 36px;
+  height: 36px;
+  display: block;
+  border-radius: 8px;
+}
+
 h1 {
   margin: 0;
   font-size: clamp(1.15rem, 3.4vw, 1.7rem);
   letter-spacing: -0.03em;
   line-height: 1.05;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+}
+
+.tagline {
+  margin: 1px 0 0;
+  color: var(--amber);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
 }
 
 #floor-count:not(:empty) + #updated:not(:empty)::before { content: " · "; }
