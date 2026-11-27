@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 42" role="img" aria-label="Tulip City Lawn Care">
+  <rect width="42" height="42" rx="6" fill="#14261F"/>
+  <path d="M6 33h30" stroke="#3D7A5A" stroke-width="2"/>
+  <path d="M8 33c2-7 5-12 7-12s4 5 6 12" fill="#3D7A5A"/>
+  <path d="M18 33c2-8 5-14 7-14s5 6 7 14" fill="#2D6A4F"/>
+  <circle cx="27" cy="13" r="5" fill="#C45C6A"/>
+  <circle cx="22" cy="16" r="4" fill="#A83C4A"/>
+  <path d="M27 18v6" stroke="#3D7A5A" stroke-width="1.5"/>
+</svg>

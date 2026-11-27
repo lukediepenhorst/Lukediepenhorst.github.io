@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#07090f">
+  <title>Luke's Bot HQ</title>
+  <meta name="description" content="A low-poly 3D office where Luke's bots sit at their desks. Statuses are sample data, edited by hand.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="hq.css">
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" crossorigin>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#roster">Skip to roster</a>
+  <header class="topbar">
+    <div class="titles">
+      <a class="home-link" href="../">All projects</a>
+      <h1>Luke's Bot HQ</h1>
+      <p class="eyebrow" id="floor-count">Nine desks</p>
+    </div>
+    <p class="manual-note">Statuses are updated manually for now.<span id="updated"></span></p>
+  </header>
+  <main class="layout">
+    <section class="stage" id="stage" aria-label="3D office">
+      <div id="viewport" class="viewport" role="img" aria-label="Stylized 3D office. Nine bots sit at desks. Choose one in the roster, or select a figure in the scene."></div>
+      <div id="loading" class="loading">Bringing the floor online…</div>
+      <div id="fallback" class="fallback" hidden>
+        <p id="fallback-text"></p>
+      </div>
+      <p id="hint" class="hint">Drag to look around. Pinch or scroll to zoom.</p>
+    </section>
+    <aside class="roster" id="roster" aria-labelledby="roster-title">
+      <div class="roster-head">
+        <h2 id="roster-title">Roster</h2>
+        <p>Same bots as the floor. Select one for details.</p>
+      </div>
+      <ul id="roster-list">
+        <li class="roster-pending">Loading roster…</li>
+      </ul>
+      <p class="roster-foot">Hand-edit <code>status.json</code>, then refresh.</p>
+    </aside>
+  </main>
+  <button id="scrim" class="scrim" type="button" hidden aria-label="Close details"></button>
+  <aside id="panel" class="panel" role="dialog" aria-modal="true" aria-labelledby="panel-name" hidden>
+    <div class="panel-top">
+      <p class="eyebrow">Bot</p>
+      <button type="button" id="panel-close" class="close">Close</button>
+    </div>
+    <span class="panel-swatch" id="panel-swatch" aria-hidden="true"></span>
+    <h2 id="panel-name"></h2>
+    <p id="panel-role" class="panel-role"></p>
+    <p class="panel-status-line">
+      <span class="panel-k">Status</span>
+      <strong id="panel-status" class="badge"></strong>
+    </p>
+    <h3>Current focus</h3>
+    <p id="panel-focus" class="panel-focus"></p>
+  </aside>
+  <noscript>
+    <p class="noscript">JavaScript is off, so the floor and roster can't load. The bots are Chief of Staff, Inbox Manager, Texts, Business Lab, Personal Shopper, Content Coach, Opportunity Scout, Money Manager, and Goal Tracker.</p>
+  </noscript>
+  <script src="roster.js"></script>
+  <script type="module" src="hq.js"></script>
+</body>
+</html>
