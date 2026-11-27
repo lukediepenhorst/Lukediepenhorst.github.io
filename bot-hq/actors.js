@@ -230,7 +230,16 @@ export function createCrew(scene, office, bots, options) {
     chat: new THREE.SpriteMaterial({ map: bubbleTexture("hi", BRAND.colors.teal), transparent: true, depthWrite: false }),
     meet: new THREE.SpriteMaterial({ map: bubbleTexture("…", BRAND.colors.ink), transparent: true, depthWrite: false }),
     mail: new THREE.SpriteMaterial({ map: bubbleTexture("✉", BRAND.colors.amber), transparent: true, depthWrite: false }),
+    five: new THREE.SpriteMaterial({ map: bubbleTexture("yo", BRAND.colors.amber), transparent: true, depthWrite: false }),
+    yes: new THREE.SpriteMaterial({ map: bubbleTexture("yes", "#3ddc8a"), transparent: true, depthWrite: false }),
   };
+  const ball = new THREE.Mesh(
+    new THREE.SphereGeometry(0.055, 8, 6),
+    new THREE.MeshBasicMaterial({ color: 0xf7f3ea })
+  );
+  ball.position.set(2.35, 0.86, 5.55);
+  ball.raycast = function () {};
+  scene.add(ball);
   const bubbles = [0, 1, 2].map(() => {
     const sprite = new THREE.Sprite(emoteMats.chat);
     sprite.visible = false;
@@ -475,6 +484,8 @@ export function createCrew(scene, office, bots, options) {
       speed: 1.55 + (index % 4) * 0.1,
       lane: (index % 3 - 1) * 0.12,
       laneNow: 0,
+      hi: 0,
+      hiCool: 0,
     };
     crew.push(bot);
   });
@@ -595,7 +606,14 @@ export function createCrew(scene, office, bots, options) {
     // Odds for the next chore. Change these if you want more coffee breaks.
     const roll = Math.random();
     const home = bot.seatId;
-    if (roll < 0.5) {
+    if (bot.status === "Done" && roll < 0.22) {
+      bot.queue = [
+        { node: home, pose: "celebrate", seconds: 1.6, emote: "yes" },
+        { node: home, pose: "sit", seconds: rand(5, 9) },
+      ];
+      return;
+    }
+    if (roll < 0.34) {
       const pickups = [bot.frontId, "sv-files", "cab-east"];
       const drops = ["sv-files", "cab-east", "sv-rack"];
       crew.forEach((other) => {
@@ -613,27 +631,43 @@ export function createCrew(scene, office, bots, options) {
         { node: to, pose: "reach", seconds: 0.75, carry: "end" },
         { node: home, pose: "sit", seconds: rand(5, 10) },
       ];
-    } else if (roll < 0.68) {
-      const spot = Math.random() < 0.55 ? "br-coffee" : "br-hang";
+    } else if (roll < 0.48) {
+      const spot = Math.random() < 0.6 ? "br-coffee" : "br-hang";
       bot.queue = [
-        { node: spot, pose: spot === "br-coffee" ? "reach" : "stand", seconds: rand(2.6, 5), emote: "chat" },
+        { node: spot, pose: spot === "br-coffee" ? "sip" : "stand", seconds: rand(2.8, 5), emote: "chat" },
         { node: home, pose: "sit", seconds: rand(5, 9) },
       ];
-    } else if (roll < 0.84) {
-      const spot = Math.random() < 0.6 ? "mt-north" : "mt-s-mid";
+    } else if (roll < 0.6) {
+      const present = Math.random() < 0.45;
       bot.queue = [
-        { node: spot, pose: "stand", seconds: rand(2.6, 5), emote: "meet" },
+        {
+          node: present ? "mt-north" : "mt-s-mid",
+          pose: present ? "present" : "stand",
+          seconds: rand(3.2, 5.5),
+          emote: "meet",
+        },
         { node: home, pose: "sit", seconds: rand(4.5, 9) },
       ];
-    } else if (roll < 0.92) {
-      const spot = Math.random() < 0.5 ? "lb-wait" : "ex-view";
+    } else if (roll < 0.72) {
+      const game = Math.random() < 0.5 ? "gm-arcade" : Math.random() < 0.5 ? "pp-n" : "pp-s";
       bot.queue = [
-        { node: spot, pose: "stand", seconds: rand(2.4, 4.5) },
+        { node: game, pose: game === "gm-arcade" ? "arcade" : "play", seconds: rand(3.5, 6), emote: "chat" },
+        { node: home, pose: "sit", seconds: rand(4.5, 8) },
+      ];
+    } else if (roll < 0.82) {
+      bot.queue = [
+        { node: "ln-seat", pose: "lounge", seconds: rand(3.5, 6.5) },
+        { node: home, pose: "sit", seconds: rand(4.5, 8) },
+      ];
+    } else if (roll < 0.9) {
+      bot.queue = [
+        { node: bot.frontId, pose: "stretch", seconds: rand(1.8, 2.8) },
         { node: home, pose: "sit", seconds: rand(4.5, 8) },
       ];
     } else {
+      const spot = Math.random() < 0.5 ? "lb-wait" : "ex-view";
       bot.queue = [
-        { node: "ln-seat", pose: "stand", seconds: rand(2.4, 4.5) },
+        { node: spot, pose: "stand", seconds: rand(2.4, 4.5) },
         { node: home, pose: "sit", seconds: rand(4.5, 8) },
       ];
     }
@@ -646,6 +680,26 @@ export function createCrew(scene, office, bots, options) {
     bot.emote = (queue[0] && queue[0].emote) || "";
     const walking = beginWalk(bot, queue[0].node);
     if (!walking) beginAct(bot);
+  }
+
+  let gameIn = 8;
+  function maybeGame(dt) {
+    if (reduce) return;
+    gameIn -= dt;
+    if (gameIn > 0) return;
+    gameIn = 16 + Math.random() * 10;
+    const free = crew.filter((bot) => bot.mode === "act" && bot.action && bot.action.pose === "sit" && !bot.carrying);
+    if (free.length < 2) return;
+    const a = free.splice(Math.floor(Math.random() * free.length), 1)[0];
+    const b = free.splice(Math.floor(Math.random() * free.length), 1)[0];
+    sendTo(a, [
+      { node: "pp-n", pose: "play", seconds: rand(5, 7), emote: "chat" },
+      { node: a.seatId, pose: "sit", seconds: rand(4, 7) },
+    ]);
+    sendTo(b, [
+      { node: "pp-s", pose: "play", seconds: rand(5, 7), emote: "chat" },
+      { node: b.seatId, pose: "sit", seconds: rand(4, 7) },
+    ]);
   }
 
   let meetingIn = 9;
@@ -697,7 +751,7 @@ export function createCrew(scene, office, bots, options) {
         bot.phase = 1.2;
         faceTravel(bot);
         bot.queue = [
-          { node: "mt-north", pose: "stand", seconds: 4.5 },
+          { node: "mt-north", pose: "present", seconds: 5.5, emote: "meet" },
           { node: seat, pose: "sit", seconds: 6.5 },
         ];
         return;
@@ -729,28 +783,43 @@ export function createCrew(scene, office, bots, options) {
       return;
     }
     if (bot.id === "money-manager") {
-      standAt(bot, "br-coffee", "reach", 6);
+      standAt(bot, "br-coffee", "sip", 6);
       bot.emote = "chat";
       bot.face = Math.atan2(6.45 - 8.35, 3.25 - 6.45);
       bot.group.rotation.y = bot.face;
       bot.queue = [
-        { node: "br-coffee", pose: "reach", seconds: 6, emote: "chat" },
+        { node: "br-coffee", pose: "sip", seconds: 6, emote: "chat" },
         { node: seat, pose: "sit", seconds: 7 },
       ];
       return;
     }
     if (bot.id === "goal-tracker") {
-      standAt(bot, "lb-wait", "stand", 8);
+      standAt(bot, "ln-seat", "lounge", 8);
       bot.queue = [
-        { node: "lb-wait", pose: "stand", seconds: 8 },
+        { node: "ln-seat", pose: "lounge", seconds: 8 },
+        { node: seat, pose: "sit", seconds: 7 },
+      ];
+      return;
+    }
+    if (bot.id === "personal-shopper") {
+      standAt(bot, seat, "celebrate", 2.2);
+      bot.emote = "yes";
+      bot.queue = [
+        { node: seat, pose: "celebrate", seconds: 2.2, emote: "yes" },
+        { node: seat, pose: "sit", seconds: 8 },
+      ];
+      return;
+    }
+    if (bot.id === "texts") {
+      standAt(bot, "gm-arcade", "arcade", 7);
+      bot.queue = [
+        { node: "gm-arcade", pose: "arcade", seconds: 7, emote: "chat" },
         { node: seat, pose: "sit", seconds: 7 },
       ];
       return;
     }
     const timers = {
       "chief-of-staff": 6.5,
-      texts: 9,
-      "personal-shopper": 8,
     };
     const seconds = timers[bot.id] || 7;
     standAt(bot, seat, "sit", seconds);
@@ -793,8 +862,9 @@ export function createCrew(scene, office, bots, options) {
   }
 
   function applyPose(bot, t, dt) {
-    const sitTarget = bot.mode === "act" && bot.action && bot.action.pose === "sit" ? 1 : 0;
-    const reachTarget = bot.mode === "act" && bot.action && bot.action.pose === "reach" ? 1 : 0;
+    const pose = bot.mode === "act" && bot.action ? bot.action.pose : "";
+    const sitTarget = pose === "sit" || pose === "lounge" ? 1 : 0;
+    const reachTarget = pose === "reach" || pose === "sip" ? 1 : 0;
     const gaitTarget = bot.mode === "walk" ? 1 : 0;
     const blend = Math.min(1, dt * 6);
     bot.sit += (sitTarget - bot.sit) * blend;
@@ -827,28 +897,78 @@ export function createCrew(scene, office, bots, options) {
       elL = elL * (1 - bot.reach) + -0.95 * bot.reach;
       elR = elR * (1 - bot.reach) + -0.9 * bot.reach;
     }
-    const typing = bot.sit > 0.7 && bot.status === "Working" && bot.reach < 0.15 && !reduce;
+    const typing = pose === "sit" && bot.status === "Working" && bot.reach < 0.15 && !reduce;
     if (typing) {
       const wiggle = Math.sin(t * 9.5 + bot.phase0) * 0.14;
       shL = SIT.shoulder + wiggle;
       shR = SIT.shoulder - wiggle;
       elL = SIT.elbow;
       elR = SIT.elbow + 0.05;
-    } else if (bot.sit > 0.7 && bot.status === "Idle" && !reduce) {
-      const wiggle = Math.sin(t * 1.4 + bot.phase0) * 0.08;
+    } else if (pose === "sit" && bot.status !== "Working" && !reduce) {
+      const wiggle = Math.sin(t * 1.4 + bot.phase0) * 0.1;
       shL = -0.35 + wiggle;
       shR = -0.35 - wiggle;
       elL = -0.4;
-      elR = -0.4;
+      elR = -0.45 + wiggle * 0.2;
+    }
+    if (pose === "stretch") {
+      shL = -2.5;
+      shR = -2.45;
+      elL = -0.25;
+      elR = -0.3;
+    } else if (pose === "sip") {
+      shR = -1.85;
+      elR = -1.35;
+      shL = -0.4;
+    } else if (pose === "present") {
+      shR = -1.35;
+      elR = -0.25;
+      shL = -0.35;
+      elL = -0.5;
+    } else if (pose === "play") {
+      const swingArm = Math.sin(t * 6 + bot.phase0);
+      shR = -0.9 + swingArm * 0.8;
+      elR = -0.7;
+      shL = -0.4;
+    } else if (pose === "arcade") {
+      shL = -1.15;
+      shR = -1.2;
+      elL = -1.05;
+      elR = -1.1;
+    } else if (pose === "lounge") {
+      shL = -0.45;
+      shR = -0.55;
+      elL = -0.7;
+      elR = -0.85;
+    } else if (pose === "celebrate" || (bot.status === "Done" && pose === "stand" && !reduce)) {
+      shL = -2.15;
+      shR = -2.15;
+      elL = -0.35;
+      elR = -0.35;
+    }
+    if (bot.hi > 0) {
+      shR = -1.75;
+      elR = -0.15;
+      bot.hi = Math.max(0, bot.hi - dt);
+      if (!bot.carrying) bot.emote = "five";
     }
     bot.shoulderL.rotation.x = shL;
     bot.shoulderR.rotation.x = shR;
     bot.elbowL.rotation.x = elL;
     bot.elbowR.rotation.x = elR;
+    if (!reduce && pose === "sit" && bot.status !== "Working") {
+      const shrug = Math.sin(t * 1.1 + bot.phase0) * 0.06;
+      bot.shoulderL.rotation.z = 0.22 + shrug;
+      bot.shoulderR.rotation.z = -0.22 - shrug;
+    }
 
     const bob = reduce ? 0 : Math.abs(Math.sin(bot.phase)) * 0.05 * bot.gait;
     const breathe = reduce ? 0 : Math.sin(t * 1.5 + bot.phase0) * 0.008;
-    bot.pelvis.position.y = -SIT.drop * bot.sit + bob + breathe;
+    const party = !reduce && (pose === "celebrate" || (bot.status === "Done" && pose === "stand"))
+      ? Math.abs(Math.sin(t * 9 + bot.phase0)) * 0.1
+      : 0;
+    const drop = pose === "lounge" ? 0.04 : SIT.drop;
+    bot.pelvis.position.y = -drop * bot.sit + bob + breathe + party;
 
     let lookY = 0;
     let lookX = 0;
@@ -902,8 +1022,31 @@ export function createCrew(scene, office, bots, options) {
 
   function update(dt, t) {
     maybeMeeting(dt);
+    maybeGame(dt);
     const coffee = crew.filter((bot) => bot.mode === "act" && (bot.nodeId === "br-coffee" || bot.nodeId === "br-hang"));
     if (coffee.length >= 2) coffee.forEach((bot) => { bot.emote = "chat"; });
+    for (let i = 0; i < crew.length; i += 1) {
+      const a = crew[i];
+      if (a.mode !== "walk" || t < a.hiCool) continue;
+      for (let j = i + 1; j < crew.length; j += 1) {
+        const b = crew[j];
+        if (b.mode !== "walk" || t < b.hiCool) continue;
+        const dist = Math.hypot(a.x - b.x, a.z - b.z);
+        if (dist < 0.85) {
+          a.hi = 0.45;
+          b.hi = 0.45;
+          a.hiCool = t + 3.2;
+          b.hiCool = t + 3.2;
+        }
+      }
+    }
+    const playing = crew.some((bot) => bot.mode === "act" && bot.action && bot.action.pose === "play");
+    if (playing) {
+      const swing = Math.sin(t * 3.2);
+      ball.position.set(2.35, 0.95 + Math.abs(Math.cos(t * 6.4)) * 0.35, 5.55 + swing * 0.7);
+    } else {
+      ball.position.set(2.35, 0.86, 5.55);
+    }
     let bubble = 0;
     bubbles.forEach((sprite) => { sprite.visible = false; });
     for (let i = 0; i < crew.length; i += 1) {
