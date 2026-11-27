@@ -89,6 +89,11 @@
     panelName.textContent = bot.name;
     panelRole.textContent = bot.role;
     panelFocus.textContent = bot.focus || "No current focus is listed.";
+    var progress = document.getElementById("panel-progress");
+    if (progress) {
+      var amount = { Working: "68%", Idle: "24%", "Waiting on Luke": "46%", Done: "100%" };
+      progress.style.width = amount[bot.status] || "40%";
+    }
     panelStatus.textContent = bot.status;
     panelStatus.className = "badge " + statusClass(bot.status);
     panelSwatch.style.background = bot.accent;

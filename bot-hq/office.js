@@ -1586,32 +1586,54 @@ export function buildOffice(scene, bots, options) {
   // Three clickable floor buttons beside the elevator. Only this floor's
   // panel is pickable while Floor 42 is showing.
   const elevatorButtons = [];
-  [43, 42, 41].forEach((level, i) => {
+  [44, 43, 42, 41].forEach((level, i) => {
     const button = new THREE.Mesh(
-      new THREE.BoxGeometry(0.28, 0.22, 0.04),
-      new THREE.MeshBasicMaterial({ color: level === 42 ? 0xffb15a : 0x2a313c })
+      new THREE.BoxGeometry(0.34, 0.2, 0.04),
+      new THREE.MeshBasicMaterial({ color: level === 42 ? 0xffb15a : 0x24303c })
     );
-    button.position.set(-0.35, 1.55 - i * 0.28, LZ - 0.16);
+    button.position.set(-0.42, 1.72 - i * 0.26, LZ - 0.16);
     button.userData.floor = level;
     elevatorButtons.push(button);
     interior.add(button);
   });
 
+  const gloss = new THREE.Mesh(
+    new THREE.PlaneGeometry(19.6, 20.6),
+    new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      metalness: 0.18,
+      roughness: 0.45,
+      transparent: true,
+      opacity: 0,
+      envMapIntensity: 0.8,
+    })
+  );
+  gloss.rotation.x = -Math.PI / 2;
+  gloss.position.set(0, 0.09, 2.2);
+  gloss.receiveShadow = true;
+  gloss.raycast = function () {};
+  interior.add(gloss);
+
   function setQuality(level) {
     qualityLevel = level;
     dashEvery = level === "low" ? 12 : 3;
     if (artMesh) artMesh.visible = level !== "low";
+    const high = level === "high";
+    gloss.material.opacity = high ? 0.16 : 0;
+    gloss.material.envMapIntensity = high ? 0.8 : 0;
+    interior.traverse((obj) => {
+      if (obj.isMesh) obj.receiveShadow = high;
+    });
   }
 
-  function setNight(on) {
-    towerMat.emissiveIntensity = on ? 2.6 : 0.2;
-    towerMat.color.set(on ? 0xffffff : 0xc9d2dc);
-    lowMat.emissiveIntensity = on ? 1.1 : 0.05;
-    lowMat.color.set(on ? 0xfff4dc : 0x6a7380);
-    // Vertex colors on the lamps and LED strips get multiplied by this.
-    if (on) glowMat.color.setRGB(2.15, 1.85, 1.35);
-    else glowMat.color.setRGB(1, 1, 1);
-    if (logoMat) logoMat.color.setRGB(on ? 1.45 : 1, on ? 1.28 : 1, on ? 1.05 : 1);
+  function setNight(amount) {
+    const k = amount === true ? 1 : amount === false ? 0 : amount;
+    towerMat.emissiveIntensity = 0.2 + k * 2.4;
+    towerMat.color.set(k > 0.45 ? 0xffffff : 0xc9d2dc);
+    lowMat.emissiveIntensity = 0.05 + k * 1.05;
+    lowMat.color.set(k > 0.45 ? 0xfff4dc : 0x6a7380);
+    glowMat.color.setRGB(1 + k * 1.15, 1 + k * 0.85, 1 + k * 0.35);
+    if (logoMat) logoMat.color.setRGB(1 + k * 0.45, 1 + k * 0.28, 1 + k * 0.05);
   }
 
   const screenPulse = new THREE.Color();
@@ -1656,6 +1678,7 @@ export function buildOffice(scene, bots, options) {
     pathErrors: pathErrors,
     pointBlocked: pointBlocked,
     interior: interior,
+    gloss: gloss,
     elevatorButtons: elevatorButtons,
     screens: screens,
     update: update,

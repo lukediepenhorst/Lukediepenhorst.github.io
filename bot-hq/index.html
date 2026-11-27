@@ -42,28 +42,35 @@
     <div class="titles">
       <div class="brand-lockup">
         <span id="brand-mark" class="brand-mark" aria-hidden="true"></span>
-        <div>
+        <div class="brand-copy">
           <h1 id="brand-name">Luke's Bot HQ</h1>
           <p id="brand-tagline" class="tagline">Nine bots. One office.</p>
         </div>
       </div>
       <p class="sub"><span id="floor-count">Nine bots</span><span id="updated"></span></p>
     </div>
-    <div class="controls">
-      <div class="floor-switch" id="floor-switch" role="group" aria-label="Elevator">
-        <button type="button" data-floor="43">43</button>
-        <button type="button" data-floor="42" aria-pressed="true">42</button>
-        <button type="button" data-floor="41">41</button>
+    <div class="floor-switch" id="floor-switch" role="group" aria-label="Elevator">
+      <button type="button" data-floor="44">PH</button>
+      <button type="button" data-floor="43">43</button>
+      <button type="button" data-floor="42" aria-pressed="true">42</button>
+      <button type="button" data-floor="41">41</button>
+    </div>
+    <button type="button" id="btn-time" class="hud-chip" aria-pressed="false">Auto</button>
+    <span id="tod-label" class="tod">Day</span>
+    <div class="menu-wrap">
+      <button type="button" id="btn-menu" class="hud-chip" aria-expanded="false" aria-controls="hud-menu">Menu</button>
+      <div id="hud-menu" class="hud-menu" hidden>
+        <button type="button" id="btn-tour" aria-pressed="false">Tour</button>
+        <button type="button" id="btn-bird" aria-pressed="false">Bird's-eye</button>
+        <button type="button" id="btn-ceo" aria-pressed="false">Play as CEO</button>
+        <button type="button" id="btn-ceo-exit" hidden>Exit</button>
+        <button type="button" id="btn-reset">Reset view</button>
+        <button type="button" id="btn-follow" hidden aria-pressed="false">Stop following</button>
+        <button type="button" id="btn-labels" aria-pressed="true">Names</button>
+        <button type="button" id="btn-roster" aria-expanded="false" aria-controls="roster">Roster</button>
+        <button type="button" id="btn-sound" aria-pressed="false">Sound off</button>
+        <button type="button" id="btn-quality" aria-pressed="false">Quality auto</button>
       </div>
-      <button type="button" id="btn-time" aria-pressed="false">Night</button>
-      <button type="button" id="btn-tour" aria-pressed="false">Tour</button>
-      <button type="button" id="btn-bird" aria-pressed="false">Bird's-eye</button>
-      <button type="button" id="btn-ceo" aria-pressed="false">Play as CEO</button>
-      <button type="button" id="btn-ceo-exit" hidden>Exit</button>
-      <button type="button" id="btn-reset">Reset view</button>
-      <button type="button" id="btn-follow" hidden aria-pressed="false">Stop following</button>
-      <button type="button" id="btn-labels" aria-pressed="true">Names</button>
-      <button type="button" id="btn-roster" aria-expanded="false" aria-controls="roster">Roster</button>
     </div>
   </header>
   <p id="hint" class="hint">Drag to look · pinch or scroll to zoom · tap a bot</p>
@@ -109,6 +116,8 @@
     </p>
     <h3>Current focus</h3>
     <p id="panel-focus" class="panel-focus"></p>
+    <p class="panel-k">Progress</p>
+    <div class="progress" aria-hidden="true"><span id="panel-progress"></span></div>
   </aside>
   <noscript>
     <p class="noscript">JavaScript is off, so the office can't load. The bots are Chief of Staff, Inbox Manager, Texts, Business Lab, Personal Shopper, Content Coach, Opportunity Scout, Money Manager, and Goal Tracker.</p>

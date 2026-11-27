@@ -6,6 +6,8 @@ import { buildExtraFloors } from "./floors.js";
 import { createCrew } from "./actors.js";
 import { createStaff } from "./staff.js";
 import { createCeo } from "./ceo.js";
+import { createAudio } from "./audio.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { applyBrandToPage } from "./brand.js";
 
 /*
@@ -103,6 +105,7 @@ function startScene(botInfos) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = false;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.setClearColor(0xa9cbe4, 1);
   viewport.appendChild(renderer.domElement);
 
@@ -143,7 +146,24 @@ function startScene(botInfos) {
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff8f0, 1.35);
   sun.position.set(9, 16, 11);
+  sun.castShadow = false;
+  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.camera.near = 2;
+  sun.shadow.camera.far = 48;
+  sun.shadow.camera.left = -18;
+  sun.shadow.camera.right = 18;
+  sun.shadow.camera.top = 18;
+  sun.shadow.camera.bottom = -18;
+  sun.shadow.bias = -0.0006;
   scene.add(sun);
+  let envMap = null;
+  try {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
+  } catch (err) {
+    envMap = null;
+  }
   const warm = new THREE.PointLight(0xffb26b, 7, 22, 2);
   warm.position.set(-1.2, 2.4, 1.4);
   const cool = new THREE.PointLight(0xc5e6ff, 4, 16, 2);
@@ -157,6 +177,11 @@ function startScene(botInfos) {
   });
   const crew = createCrew(scene, office, botInfos, { reduceMotion: reduce });
   const extra = buildExtraFloors(scene);
+  const audio = createAudio();
+  if (envMap) {
+    office.gloss.material.envMap = envMap;
+    extra.glosses.forEach((mesh) => { mesh.material.envMap = envMap; });
+  }
   const staff = createStaff(scene);
   const ceo = createCeo(scene);
   const floorPick = new THREE.Mesh(
@@ -275,38 +300,51 @@ function startScene(botInfos) {
 
   document.getElementById("btn-reset").addEventListener("click", resetView);
   const timeButton = document.getElementById("btn-time");
-  let night = false;
-  function applyTimeOfDay() {
-    if (night) {
-      scene.background.set(0x070b16);
-      scene.fog.color.set(0x070b16);
-      renderer.setClearColor(0x070b16, 1);
-      hemi.intensity = 0.28;
-      sun.intensity = 0.22;
-      warm.intensity = 11;
-      cool.intensity = 7;
-      renderer.toneMappingExposure = 0.92;
-    } else {
-      scene.background.set(0xa9cbe4);
-      scene.fog.color.set(0xa9cbe4);
-      renderer.setClearColor(0xa9cbe4, 1);
-      hemi.intensity = 0.95;
-      sun.intensity = 1.35;
-      warm.intensity = 7;
-      cool.intensity = 4;
-      renderer.toneMappingExposure = 1.05;
-    }
-    office.setNight(night);
-    extra.setNight(night);
+  const todLabel = document.getElementById("tod-label");
+  let timeMode = "auto";
+  const dayColor = new THREE.Color(0xa9cbe4);
+  const nightColor = new THREE.Color(0x070b16);
+  const skyColor = new THREE.Color();
+  function nightAmount(elapsed) {
+    if (timeMode === "day") return 0;
+    if (timeMode === "night") return 1;
+    const u = (elapsed % 180) / 180;
+    if (u < 0.4) return 0;
+    if (u < 0.55) return (u - 0.4) / 0.15;
+    if (u < 0.8) return 1;
+    return 1 - (u - 0.8) / 0.2;
+  }
+  function todName(k) {
+    if (k < 0.15) return "Day";
+    if (k < 0.55) return "Dusk";
+    if (k < 0.85) return "Night";
+    return "Dawn";
+  }
+  function applyTimeOfDay(elapsed) {
+    const k = nightAmount(elapsed || 0);
+    skyColor.copy(dayColor).lerp(nightColor, k);
+    scene.background.copy(skyColor);
+    scene.fog.color.copy(skyColor);
+    renderer.setClearColor(skyColor, 1);
+    hemi.intensity = 0.95 - k * 0.67;
+    sun.intensity = 1.35 - k * 1.13;
+    sun.position.set(Math.cos(k * Math.PI) * 14, 5 + (1 - k) * 12, 8 + Math.sin(k * Math.PI) * 6);
+    warm.intensity = 7 + k * 4;
+    cool.intensity = 4 + k * 3;
+    renderer.toneMappingExposure = 1.05 - k * 0.13;
+    office.setNight(k);
+    extra.setNight(k);
     if (timeButton) {
-      timeButton.textContent = night ? "Day" : "Night";
-      timeButton.setAttribute("aria-pressed", night ? "true" : "false");
+      const labels = { auto: "Auto", day: "Day", night: "Night" };
+      timeButton.textContent = labels[timeMode];
+      timeButton.setAttribute("aria-pressed", timeMode === "auto" ? "false" : "true");
     }
+    if (todLabel) todLabel.textContent = timeMode === "auto" ? todName(k) : (timeMode === "night" ? "Night" : "Day");
   }
   if (timeButton) {
     timeButton.addEventListener("click", () => {
-      night = !night;
-      applyTimeOfDay();
+      timeMode = timeMode === "auto" ? "day" : timeMode === "day" ? "night" : "auto";
+      applyTimeOfDay(0);
     });
   }
   followButtons.forEach((button) => {
@@ -347,7 +385,10 @@ function startScene(botInfos) {
 
   document.addEventListener("bothq:select", (event) => {
     const id = event.detail && event.detail.id;
-    if (id) startFollow(id);
+    if (id) {
+      startFollow(id);
+      if (crew.playTask) crew.playTask(id);
+    }
     if (narrow()) setRoster(false);
   });
   document.addEventListener("bothq:close", () => stopFollow());
@@ -682,46 +723,116 @@ function startScene(botInfos) {
     return floor ? !!floor.pointBlocked(x, z) : true;
   }
 
+  let ride = null;
+  let pendingFloor = 0;
+  function commitFloor(next) {
+    floorId = next;
+    office.interior.visible = next === 42;
+    extra.show(next);
+    const floor = extra.active(next);
+    if (crew.setActiveFloor) crew.setActiveFloor(next, floor ? floor.stations : null);
+    else crew.setVisible(next === 42);
+    staff.show(next);
+    if (ceoOn) ceo.place(-1.2, next === 44 ? 6.2 : 10.4);
+    document.querySelectorAll("#floor-switch button").forEach((button) => {
+      button.setAttribute("aria-pressed", Number(button.dataset.floor) === next ? "true" : "false");
+    });
+  }
   function setFloor(id) {
     const next = Number(id);
-    if (floorBusy || next === floorId || (next !== 41 && next !== 42 && next !== 43)) return;
+    if ([41, 42, 43, 44].indexOf(next) < 0 || next === floorId) return;
+    if (floorBusy) {
+      if (ride && !ride.swapped) ride.next = next;
+      else pendingFloor = next;
+      return;
+    }
     floorBusy = true;
-    const names = { 41: "Sales floor", 42: "Luke's Bot HQ", 43: "Innovation lab" };
+    const names = { 41: "Sales floor", 42: "Luke's Bot HQ", 43: "Innovation lab", 44: "Penthouse" };
     if (floorCard) {
       floorCard.hidden = false;
-      floorCard.textContent = "Floor " + next + " · " + names[next];
+      floorCard.textContent = "Floor " + (next === 44 ? "PH" : next) + " · " + names[next];
     }
-    window.setTimeout(() => {
-      floorId = next;
-      office.interior.visible = next === 42;
-      extra.show(next);
-      crew.setVisible(next === 42);
-      staff.show(next);
-      if (ceoOn) ceo.place(-1.2, 10.4);
-      document.querySelectorAll("#floor-switch button").forEach((button) => {
-        button.setAttribute("aria-pressed", Number(button.dataset.floor) === next ? "true" : "false");
-      });
+    if (reduce) {
+      commitFloor(next);
       floorBusy = false;
-      window.setTimeout(() => {
-        if (floorCard) floorCard.hidden = true;
-      }, 320);
-    }, 380);
+      if (floorCard) floorCard.hidden = true;
+      return;
+    }
+    ride = {
+      t: 0,
+      next: next,
+      swapped: false,
+      from: camera.position.clone(),
+      fromT: controls.target.clone(),
+    };
+  }
+  function stepRide(dt) {
+    if (!ride) return;
+    ride.t += dt;
+    const k = Math.min(1, ride.t / 1.15);
+    const dip = Math.sin(k * Math.PI);
+    camera.position.copy(ride.from);
+    camera.position.y = Math.max(2.2, ride.from.y - dip * Math.min(8, ride.from.y * 0.45));
+    controls.target.copy(ride.fromT);
+    camera.lookAt(controls.target);
+    if (k >= 0.45 && !ride.swapped) {
+      ride.swapped = true;
+      commitFloor(ride.next);
+    }
+    if (k >= 1) {
+      ride = null;
+      floorBusy = false;
+      window.setTimeout(() => { if (floorCard) floorCard.hidden = true; }, 280);
+      if (pendingFloor && pendingFloor !== floorId) {
+        const queued = pendingFloor;
+        pendingFloor = 0;
+        setFloor(queued);
+      }
+      if (!ceoOn && !bird) {
+        const home = homeView();
+        tween = {
+          t: 0,
+          fromPos: camera.position.clone(),
+          toPos: new THREE.Vector3(home.pos[0], home.pos[1], home.pos[2]),
+          fromTgt: controls.target.clone(),
+          toTgt: new THREE.Vector3(home.target[0], home.target[1], home.target[2]),
+          fromFov: camera.fov,
+          toFov: home.fov,
+        };
+      }
+    }
   }
 
   function setBird(on) {
-    bird = on;
     if (on) {
       if (ceoOn) stopCeo();
       if (tour || tourArm) stopTour();
-      camera.position.set(0.2, 26, 1.1);
-      controls.target.set(0, 0, 1);
-      camera.lookAt(controls.target);
+      bird = true;
+      tween = {
+        t: 0,
+        fromPos: camera.position.clone(),
+        toPos: new THREE.Vector3(0.2, 26, 1.1),
+        fromTgt: controls.target.clone(),
+        toTgt: new THREE.Vector3(0, 0, 1),
+        fromFov: camera.fov,
+        toFov: camera.fov,
+      };
       controls.minPolarAngle = 0.02;
       controls.maxPolarAngle = 0.32;
     } else {
+      bird = false;
       controls.minPolarAngle = 0.08;
       controls.maxPolarAngle = Math.PI / 2 - 0.08;
-      frameHome();
+      const home = homeView();
+      tween = {
+        t: 0,
+        fromPos: camera.position.clone(),
+        toPos: new THREE.Vector3(home.pos[0], home.pos[1], home.pos[2]),
+        fromTgt: controls.target.clone(),
+        toTgt: new THREE.Vector3(home.target[0], home.target[1], home.target[2]),
+        fromFov: camera.fov,
+        toFov: home.fov,
+      };
     }
     if (birdButton) birdButton.setAttribute("aria-pressed", on ? "true" : "false");
   }
@@ -807,6 +918,44 @@ function startScene(botInfos) {
   document.querySelectorAll("#floor-switch button").forEach((button) => {
     button.addEventListener("click", () => setFloor(button.dataset.floor));
   });
+  const menu = document.getElementById("hud-menu");
+  const menuButton = document.getElementById("btn-menu");
+  if (menuButton && menu) {
+    menuButton.addEventListener("click", () => {
+      const open = menu.hidden;
+      menu.hidden = !open;
+      menuButton.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  }
+  const soundButton = document.getElementById("btn-sound");
+  function syncSound() {
+    if (!soundButton) return;
+    const off = audio.isMuted();
+    soundButton.textContent = off ? "Sound off" : "Sound on";
+    soundButton.setAttribute("aria-pressed", off ? "false" : "true");
+  }
+  syncSound();
+  if (soundButton) soundButton.addEventListener("click", () => { audio.toggle(); syncSound(); });
+  const qualityButton = document.getElementById("btn-quality");
+  let qualityLock = null;
+  function syncQualityButton() {
+    if (!qualityButton) return;
+    qualityButton.textContent = qualityLock === "low" ? "Quality low" : "Quality auto";
+    qualityButton.setAttribute("aria-pressed", qualityLock === "low" ? "true" : "false");
+  }
+  if (qualityButton) {
+    qualityButton.addEventListener("click", () => {
+      qualityLock = qualityLock === "low" ? null : "low";
+      quality = qualityLock === "low" ? "low" : "high";
+      office.setQuality(quality);
+      extra.setQuality(quality);
+      sun.castShadow = quality === "high";
+      renderer.shadowMap.enabled = quality === "high";
+      resize();
+      syncQualityButton();
+    });
+  }
+  renderer.domElement.addEventListener("pointerdown", () => audio.unlock());
   if (birdButton) birdButton.addEventListener("click", () => setBird(!bird));
   if (ceoButton) ceoButton.addEventListener("click", () => { if (ceoOn) stopCeo(); else startCeo(); });
   if (exitButton) exitButton.addEventListener("click", () => stopCeo());
@@ -876,24 +1025,33 @@ function startScene(botInfos) {
       if (quality === "high" && slowTime > 1.6) {
         quality = "low";
         office.setQuality("low");
+        extra.setQuality("low");
         staff.setQuality("low");
+        sun.castShadow = false;
+        renderer.shadowMap.enabled = false;
         if (intro) endIntro(false);
         resize();
-      } else if (quality === "low" && smoothTime > 2.5) {
+      } else if (quality === "low" && qualityLock !== "low" && smoothTime > 2.5) {
         quality = "high";
         office.setQuality("high");
+        extra.setQuality("high");
         staff.setQuality("high");
+        sun.castShadow = true;
+        renderer.shadowMap.enabled = true;
         slowTime = 0;
         resize();
       }
     }
-    office.update(floorId === 42 ? t : 0);
-    if (floorId === 42) crew.update(dt, t);
+    office.update(t);
+    extra.update(t);
+    crew.update(dt, t);
     staff.update(t);
+    audio.update(dt);
+    applyTimeOfDay(t);
     if (ceoOn) {
       const move = stickWorld();
       ceo.update(dt, move, blockedCell);
-      const fromBots = floorId === 42 ? crew.greet(ceo.state.x, ceo.state.z, t) : { phrase: "", cheer: false };
+      const fromBots = crew.greet(ceo.state.x, ceo.state.z, t);
       const fromStaff = staff.greet(ceo.state.x, ceo.state.z, t, floorId, dt);
       if (fromBots.phrase) lastGreet = fromBots.phrase;
       if (fromStaff.phrase) lastGreet = fromStaff.phrase;
@@ -913,7 +1071,9 @@ function startScene(botInfos) {
     }
     controls.enabled = !ceoOn;
 
-    if (intro) {
+    if (ride) {
+      stepRide(dt);
+    } else if (intro) {
       intro.t += Math.min(raw, 0.05);
       // Hold on the exterior sign, then glide up to the floor.
       const hold = 0.75;
