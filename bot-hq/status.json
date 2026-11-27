@@ -1,0 +1,79 @@
+{
+  "lastUpdated": "2026-11-26T15:30:00Z",
+  "statusValues": ["Working", "Idle", "Waiting on Luke", "Done"],
+  "editing": "Sample data. Change status to one of statusValues, rewrite focus, and update lastUpdated. The page reads this file when it loads.",
+  "bots": [
+    {
+      "id": "chief-of-staff",
+      "name": "Chief of Staff",
+      "role": "Lines up the day and flags what actually needs Luke.",
+      "status": "Working",
+      "focus": "Sample: turning overnight notes into tomorrow's top three.",
+      "accent": "#f0b429"
+    },
+    {
+      "id": "inbox-manager",
+      "name": "Inbox Manager",
+      "role": "Sorts email and drafts replies for a quick review.",
+      "status": "Working",
+      "focus": "Sample: grouping newsletters and flagging two threads that need a reply.",
+      "accent": "#3ddecb"
+    },
+    {
+      "id": "texts",
+      "name": "Texts",
+      "role": "Watches messages and holds short replies for approval.",
+      "status": "Waiting on Luke",
+      "focus": "Sample: a Thursday plan reply is drafted and waiting for Luke to confirm.",
+      "accent": "#b9a2ff"
+    },
+    {
+      "id": "business-lab",
+      "name": "Business Lab",
+      "role": "Sketches offers and the next small experiment.",
+      "status": "Idle",
+      "focus": "Sample: paused after a one-page offer sketch. Nothing else is queued.",
+      "accent": "#b6e34a"
+    },
+    {
+      "id": "personal-shopper",
+      "name": "Personal Shopper",
+      "role": "Compares options and keeps a short list to buy.",
+      "status": "Done",
+      "focus": "Sample: left a three-option note for a desk lamp. No open search.",
+      "accent": "#ff7a90"
+    },
+    {
+      "id": "content-coach",
+      "name": "Content Coach",
+      "role": "Turns rough ideas into outlines and tighter drafts.",
+      "status": "Working",
+      "focus": "Sample: tightening the first paragraph of a short project write-up.",
+      "accent": "#6ec8ff"
+    },
+    {
+      "id": "opportunity-scout",
+      "name": "Opportunity Scout",
+      "role": "Looks for leads and openings worth a closer look.",
+      "status": "Idle",
+      "focus": "Sample: between scans. No lead is marked urgent.",
+      "accent": "#ff9a4a"
+    },
+    {
+      "id": "money-manager",
+      "name": "Money Manager",
+      "role": "Tracks bills, cash, and a simple monthly picture.",
+      "status": "Waiting on Luke",
+      "focus": "Sample: the month is ready to close once Luke confirms one category.",
+      "accent": "#3ddc8a"
+    },
+    {
+      "id": "goal-tracker",
+      "name": "Goal Tracker",
+      "role": "Checks weekly goals and the next concrete step.",
+      "status": "Done",
+      "focus": "Sample: this week's check-in is logged. Next review is Monday.",
+      "accent": "#ff7ad9"
+    }
+  ]
+}
