@@ -23,8 +23,8 @@ import { applyBrandToPage } from "./brand.js";
 const MAX_PIXEL_RATIO = 2;
 
 const HOME = {
-  wide: { fov: 32, pos: [12.4, 16.2, 18.6], target: [-0.4, 0.4, 2.2] },
-  narrow: { fov: 48, pos: [8.2, 19.5, 20.4], target: [0, 0.2, 2.6] },
+  wide: { fov: 34, pos: [18, 17.5, 24], target: [-1.2, 0.5, 0.4] },
+  narrow: { fov: 52, pos: [12, 22, 30], target: [-0.4, 0.4, 0.6] },
 };
 
 const STATUS_SPEED = {
@@ -105,7 +105,7 @@ function startScene(botInfos) {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xa9cbe4);
-  scene.fog = new THREE.Fog(0xa9cbe4, 42, 110);
+  scene.fog = new THREE.Fog(0xa9cbe4, 70, 170);
 
   const camera = new THREE.PerspectiveCamera(36, 1, 0.08, 180);
   const labelRenderer = new CSS2DRenderer();
@@ -420,19 +420,22 @@ function startScene(botInfos) {
     const home = homeView();
     intro = {
       t: 0,
-      fromPos: new THREE.Vector3(2, 5.5, 22),
+      fromPos: new THREE.Vector3(2.4, 7.2, 24),
       toPos: new THREE.Vector3(home.pos[0], home.pos[1], home.pos[2]),
-      fromTgt: new THREE.Vector3(0, 1.6, 4),
+      fromTgt: new THREE.Vector3(0.05, 4.0, 13.2),
       toTgt: new THREE.Vector3(home.target[0], home.target[1], home.target[2]),
     };
     camera.position.copy(intro.fromPos);
     controls.target.copy(intro.fromTgt);
+    camera.lookAt(intro.fromTgt);
     if (introSkip) introSkip.hidden = false;
   }
   function endIntro() {
     if (!intro) return;
     intro = null;
     frameHome();
+    // Same settle as Reset view, so the orbit doesn't drift off the home pose.
+    for (let i = 0; i < 80; i += 1) controls.update();
     if (introSkip) introSkip.hidden = true;
   }
 
@@ -538,15 +541,20 @@ function startScene(botInfos) {
 
     if (intro) {
       intro.t += Math.min(raw, 0.05);
-      const k = smoothstep(Math.min(1, intro.t / 2.4));
+      // Hold on the exterior sign, then glide up to the floor.
+      const hold = 0.75;
+      const move = 1.65;
+      const k = intro.t <= hold ? 0 : smoothstep(Math.min(1, (intro.t - hold) / move));
       camera.position.lerpVectors(intro.fromPos, intro.toPos, k);
       controls.target.lerpVectors(intro.fromTgt, intro.toTgt, k);
-      if (intro.t >= 2.4) endIntro();
+      camera.lookAt(controls.target);
+      if (intro.t >= hold + move) endIntro();
     } else if (tween) {
       tween.t += raw / 0.7;
       const k = smoothstep(Math.min(1, tween.t));
       camera.position.lerpVectors(tween.fromPos, tween.toPos, k);
       controls.target.lerpVectors(tween.fromTgt, tween.toTgt, k);
+      camera.lookAt(controls.target);
       camera.fov = tween.fromFov + (tween.toFov - tween.fromFov) * k;
       camera.updateProjectionMatrix();
       if (tween.t >= 1) {
@@ -583,7 +591,8 @@ function startScene(botInfos) {
     }
 
     if (!tween && !intro) controls.update();
-    clampTarget();
+    // The opening shot looks at the sign above the floor, outside the orbit box.
+    if (!intro) clampTarget();
 
     const selected = window.BotHQ ? window.BotHQ.selectedId : null;
     const selectedBot = selected ? crew.get(selected) : null;

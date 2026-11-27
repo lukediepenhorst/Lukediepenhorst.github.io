@@ -498,12 +498,6 @@ export function buildOffice(scene, bots, options) {
     addShadow(x, z, 0.42 * s, 0.36 * s);
   }
 
-  function addTree(x, z, h) {
-    addCyl(lit, C.trunk, 0.1, 0.16, h * 0.42, x, h * 0.21, z, 6);
-    addCone(lit, C.plantDark, h * 0.38, h * 0.48, x, h * 0.5, z);
-    addCone(lit, C.plant, h * 0.28, h * 0.36, x, h * 0.78, z);
-  }
-
   function addLamp(x, z) {
     addCyl(lit, C.metalDark, 0.015, 0.015, 0.7, x, WALL_H - 0.35, z, 4);
     addCyl(lit, C.shade, 0.26, 0.16, 0.14, x, WALL_H - 0.78, z, 8);
@@ -601,11 +595,11 @@ export function buildOffice(scene, bots, options) {
     addBox(lit, accent, backW, 0.4, backD, bx, 0.78, bz);
   }
 
-  // --- outdoors and floors -------------------------------------------------
+  // --- floors --------------------------------------------------------------
+  // The slab is dark wood. Lobby and the executive office get a lighter stone on top.
+  // The city itself is built far below this floor, not around it at ground level.
 
-  addBox(lit, C.grass, 70, 0.2, 70, 0, -0.2, 0);
-  addBox(lit, C.walk, 26, 0.08, 30, 0, -0.04, 2.2);
-  addBox(lit, BRAND.colors.concrete, 20.3, 0.12, 16.3, 0, 0.02, 0);
+  addBox(lit, "#3e281c", 20.3, 0.12, 16.3, 0, 0.02, 0);
   // Room floors sit a hair above the wood so each room reads as its own material.
   addBox(lit, C.tileDark, 10.5, 0.025, 5.4, (X0 + SPLIT_X) / 2, 0.035, (Z0 + NORTH_Z) / 2);
   addBox(lit, C.carpet, 9.3, 0.025, 5.4, (SPLIT_X + X1) / 2, 0.035, (Z0 + NORTH_Z) / 2);
@@ -615,15 +609,6 @@ export function buildOffice(scene, bots, options) {
   addBox(lit, C.rugBreak, 2.2, 0.02, 1.6, 7.7, 0.04, 3.5);
   addBox(lit, C.runner, 1.35, 0.015, 8.2, 4.15, 0.04, 2.4);
   addBox(lit, "#e7c9a4", 3.4, 0.015, 2.4, 8.1, 0.04, -0.15);
-
-  addTree(-13.2, -6.5, 2.4);
-  addTree(13.4, -7.2, 2.7);
-  addTree(-14, 6.2, 2.2);
-  addTree(14.2, 5.4, 2.5);
-  addTree(0.4, -12.2, 2.8);
-  addSphere(lit, C.plantDark, 0.35, -12.2, 0.28, -2);
-  addSphere(lit, C.plant, 0.28, 12.6, 0.22, 1.5);
-  addSphere(lit, C.plantDark, 0.3, 11.8, 0.24, -2.4);
 
   // --- walls ---------------------------------------------------------------
 
@@ -808,7 +793,9 @@ export function buildOffice(scene, bots, options) {
 
   const LZ = 13.15;
   const LX1 = 5;
-  addBox(lit, "#e7e2da", 14.9, 0.06, 5.35, (X0 + LX1) / 2, 0.05, (Z1 + LZ) / 2);
+  addBox(lit, "#f7f3ea", 14.9, 0.05, 5.35, (X0 + LX1) / 2, 0.1, (Z1 + LZ) / 2);
+  addBox(lit, "#cfc6b8", 14.9, 0.012, 0.18, (X0 + LX1) / 2, 0.132, Z1 + 0.2);
+  addBox(lit, "#e3ddd2", 6.2, 0.012, 0.12, -1.5, 0.14, 10.8);
   addBox(lit, "#d4cdc3", 8, 0.012, 0.08, -2, 0.09, 10.6);
   addBox(lit, C.rug, 3.2, 0.02, 2.2, -6.4, 0.07, 11.3);
   addBox(lit, "#e7d3b4", 2.4, 0.02, 1.6, 1.55, 0.07, 10.2);
@@ -820,6 +807,8 @@ export function buildOffice(scene, bots, options) {
   block("lb-s", X0, LZ - T / 2, LX1, LZ + T / 2);
   curtainZ(X0, Z1 + T / 2, LZ - T / 2);
   curtainX(LZ, X0 + T / 2, LX1 - T / 2);
+  // Dark crown above the south glass. The exterior sign hangs on this face.
+  addBox(lit, "#1a222c", 12.6, 1.85, 0.42, 0.05, 4.05, LZ + 0.08);
   // Glass partition with a door, facing the lobby. glassWallX only runs along x, so this one is built by hand.
   addBox(lit, "#e4dfd8", T + 0.02, 0.12, 8.85 - Z1, LX1, 0.06, (Z1 + 8.85) / 2);
   addBox(lit, "#e4dfd8", T + 0.02, 0.12, LZ - 10.25, LX1, 0.06, (10.25 + LZ) / 2);
@@ -834,7 +823,8 @@ export function buildOffice(scene, bots, options) {
   addBox(lit, C.metal, 0.08, 0.08, 0.08, -1.2, 1.05, LZ - 0.3);
 
   // Corner executive office, east of the lobby, with glass on the city side.
-  addBox(lit, "#e7e2da", 5.2, 0.06, 5.2, 7.5, 0.05, (Z1 + LZ) / 2);
+  addBox(lit, "#f7f3ea", 5.2, 0.05, 5.2, 7.5, 0.1, (Z1 + LZ) / 2);
+  addBox(lit, "#cfc6b8", 5.2, 0.012, 0.16, 7.5, 0.132, Z1 + 0.16);
   addBox(lit, "#5c3d2e", 2.05, 0.08, 0.95, 8.15, 0.8, 11.55);
   [[-0.85, -0.35], [0.85, -0.35], [-0.85, 0.35], [0.85, 0.35]].forEach((p) => {
     addBox(lit, C.woodDark, 0.08, 0.72, 0.08, 8.15 + p[0], 0.38, 11.55 + p[1]);
@@ -1197,7 +1187,7 @@ export function buildOffice(scene, bots, options) {
   const paneMat = new THREE.MeshBasicMaterial({
     color: 0xd5eef8,
     transparent: true,
-    opacity: 0.38,
+    opacity: 0.22,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
@@ -1264,33 +1254,100 @@ export function buildOffice(scene, bots, options) {
     emissiveMap: towerMap,
     emissiveIntensity: 0.16,
   });
-  const towerCount = 42;
-  const towers = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), towerMat, towerCount);
+  // Nearby towers rise through this floor and past it, so the overhead view
+  // sees them beyond the glass. Their bases sit well below the slab.
+  const nearTowers = [
+    [20, 0, 5.5, 5, 36],
+    [24, -10, 4.5, 6, 28],
+    [18, 8, 6, 4.5, 24],
+    [-22, 0, 5, 6, 40],
+    [-18, -10, 6, 4, 30],
+    [2, -24, 7, 5, 42],
+    [-10, -22, 5, 5, 26],
+    [24, 16, 5, 5, 32],
+    [-18, 18, 6, 4.5, 34],
+    [28, 4, 4, 4, 22],
+  ];
+  const towers = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), towerMat, nearTowers.length);
   towers.raycast = function () {};
   const towerDummy = new THREE.Object3D();
+  nearTowers.forEach((spec, i) => {
+    const h = spec[4];
+    const base = -14;
+    towerDummy.position.set(spec[0], base + h / 2, spec[1]);
+    towerDummy.scale.set(spec[2], h, spec[3]);
+    towerDummy.rotation.set(0, 0, 0);
+    towerDummy.updateMatrix();
+    towers.setMatrixAt(i, towerDummy.matrix);
+  });
+  towers.instanceMatrix.needsUpdate = true;
+  scene.add(towers);
+
+  // The floor sits on top of its own shaft, so the slab reads as a high floor
+  // rather than a building standing on the ground.
+  const shaft = new THREE.Mesh(new THREE.BoxGeometry(14, 36, 18), towerMat);
+  shaft.position.set(0, -18, 1.2);
+  shaft.raycast = function () {};
+  scene.add(shaft);
+
+  // Shorter blocks and a street grid, far below the floor.
+  const lowMat = new THREE.MeshLambertMaterial({
+    color: 0x6a7380,
+    map: towerMap,
+    emissive: 0xffe6bf,
+    emissiveMap: towerMap,
+    emissiveIntensity: 0.05,
+  });
+  const lowCount = 28;
+  const lows = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), lowMat, lowCount);
+  lows.raycast = function () {};
   let seed = 19;
   function rnd() {
     seed = (seed * 16807) % 2147483647;
     return (seed % 1000) / 1000;
   }
-  for (let i = 0; i < towerCount; i += 1) {
-    const side = i % 4;
-    const along = -28 + rnd() * 56;
-    let x = 0;
-    let z = 0;
-    if (side === 0) { x = -22 - rnd() * 18; z = along * 0.6; }
-    else if (side === 1) { x = 22 + rnd() * 18; z = along * 0.6; }
-    else if (side === 2) { x = along; z = -26 - rnd() * 16; }
-    else { x = (rnd() < 0.5 ? -1 : 1) * (22 + rnd() * 16); z = 22 + rnd() * 8; }
-    const h = 8 + rnd() * 22;
-    towerDummy.position.set(x, h / 2 - 1, z);
-    towerDummy.scale.set(2.2 + rnd() * 3.5, h, 2.2 + rnd() * 3.5);
+  for (let i = 0; i < lowCount; i += 1) {
+    const h = 6 + rnd() * 12;
+    const x = -40 + rnd() * 80;
+    const z = -40 + rnd() * 80;
+    towerDummy.position.set(x, -36 + h / 2, z);
+    towerDummy.scale.set(4 + rnd() * 7, h, 4 + rnd() * 7);
     towerDummy.rotation.set(0, 0, 0);
     towerDummy.updateMatrix();
-    towers.setMatrixAt(i, towerDummy.matrix);
+    lows.setMatrixAt(i, towerDummy.matrix);
   }
-  towers.instanceMatrix.needsUpdate = true;
-  scene.add(towers);
+  lows.instanceMatrix.needsUpdate = true;
+  scene.add(lows);
+
+  const streetCanvas = document.createElement("canvas");
+  streetCanvas.width = 256;
+  streetCanvas.height = 256;
+  const sg = streetCanvas.getContext("2d");
+  sg.fillStyle = "#3a4048";
+  sg.fillRect(0, 0, 256, 256);
+  sg.fillStyle = "#2a3036";
+  for (let i = 0; i < 4; i += 1) {
+    sg.fillRect(i * 64, 0, 48, 256);
+    sg.fillRect(0, i * 64, 256, 48);
+  }
+  sg.strokeStyle = "#d8d2c4";
+  sg.lineWidth = 2;
+  for (let i = 0; i < 4; i += 1) {
+    sg.strokeRect(i * 64 + 8, 8, 32, 240);
+  }
+  const streetMap = new THREE.CanvasTexture(streetCanvas);
+  streetMap.colorSpace = THREE.SRGBColorSpace;
+  streetMap.wrapS = THREE.RepeatWrapping;
+  streetMap.wrapT = THREE.RepeatWrapping;
+  streetMap.repeat.set(8, 8);
+  const street = new THREE.Mesh(
+    new THREE.PlaneGeometry(180, 180),
+    new THREE.MeshLambertMaterial({ map: streetMap, color: 0x9aa0a6 })
+  );
+  street.rotation.x = -Math.PI / 2;
+  street.position.y = -48;
+  street.raycast = function () {};
+  scene.add(street);
 
   const exterior = document.createElement("canvas");
   exterior.width = 512;
@@ -1308,10 +1365,10 @@ export function buildOffice(scene, bots, options) {
   const exteriorTex = new THREE.CanvasTexture(exterior);
   exteriorTex.colorSpace = THREE.SRGBColorSpace;
   const exteriorSign = new THREE.Mesh(
-    new THREE.PlaneGeometry(3.4, 0.85),
-    new THREE.MeshBasicMaterial({ map: exteriorTex })
+    new THREE.PlaneGeometry(8.2, 2.05),
+    new THREE.MeshBasicMaterial({ map: exteriorTex, side: THREE.DoubleSide })
   );
-  exteriorSign.position.set(0.2, 3.15, LZ + 0.28);
+  exteriorSign.position.set(0.05, 4.05, LZ + 0.36);
   exteriorSign.raycast = function () {};
   scene.add(exteriorSign);
 
@@ -1343,8 +1400,13 @@ export function buildOffice(scene, bots, options) {
   }
 
   function setNight(on) {
-    towerMat.emissiveIntensity = on ? 1.25 : 0.14;
-    towerMat.color.set(on ? 0x9aa6b8 : 0xd5dde6);
+    towerMat.emissiveIntensity = on ? 2.6 : 0.2;
+    towerMat.color.set(on ? 0xffffff : 0xc9d2dc);
+    lowMat.emissiveIntensity = on ? 1.1 : 0.05;
+    lowMat.color.set(on ? 0xfff4dc : 0x6a7380);
+    // Vertex colors on the lamps get multiplied by this, so night makes them bloom.
+    if (on) glowMat.color.setRGB(1.85, 1.6, 1.2);
+    else glowMat.color.setRGB(1, 1, 1);
   }
 
   function update(time) {
