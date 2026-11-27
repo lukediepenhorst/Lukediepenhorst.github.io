@@ -383,6 +383,18 @@ export function buildOffice(scene, bots, options) {
     block(name, x0, z - T / 2, x1, z + T / 2);
   }
 
+  function glassWallZ(x, z0, z1, name) {
+    const d = Math.abs(z1 - z0);
+    if (d < 0.02) return;
+    const cz = (z0 + z1) / 2;
+    addBox(lit, C.wall, T, 0.85, d, x, 0.42, cz);
+    addBox(lit, C.trim, T + 0.04, 0.16, d, x, 2.28, cz);
+    addBox(lit, C.trim, T + 0.05, 1.3, 0.08, x, 1.5, z0);
+    addBox(lit, C.trim, T + 0.05, 1.3, 0.08, x, 1.5, z1);
+    addPlane(panes, d - 0.12, 1.2, x, 1.5, cz, Math.PI / 2);
+    block(name, x - T / 2, z0, x + T / 2, z1);
+  }
+
   function solidZ(x, z0, z1, name, color) {
     const d = Math.abs(z1 - z0);
     if (d < 0.02) return;
@@ -547,37 +559,29 @@ export function buildOffice(scene, bots, options) {
   }
 
   function addDesk(id, x, z, accent) {
-    addBox(lit, C.desk, 1.36, 0.07, 0.66, x, 0.74, z);
-    addBox(lit, accent, 1.36, 0.025, 0.035, x, 0.785, z + 0.32);
-    [[-0.58, -0.26], [0.58, -0.26], [-0.58, 0.26], [0.58, 0.26]].forEach((p) => {
-      addBox(lit, C.woodDark, 0.06, 0.7, 0.06, x + p[0], 0.35, z + p[1]);
+    addBox(lit, "#2a241e", 1.42, 0.06, 0.68, x, 0.74, z);
+    addBox(glow, accent, 1.28, 0.02, 0.025, x, 0.78, z + 0.34);
+    [[-0.6, -0.28], [0.6, -0.28], [-0.6, 0.28], [0.6, 0.28]].forEach((p) => {
+      addBox(lit, C.metalDark, 0.05, 0.7, 0.05, x + p[0], 0.35, z + p[1]);
     });
-    addBox(lit, C.bezel, 0.56, 0.38, 0.045, x, 1.08, z - 0.2);
-    addBox(lit, C.metalDark, 0.06, 0.22, 0.06, x, 0.86, z - 0.2);
-    addBox(lit, C.metalDark, 0.22, 0.025, 0.14, x, 0.76, z - 0.2);
+    [-0.3, 0.3].forEach((dx, i) => {
+      addBox(lit, C.bezel, 0.5, 0.34, 0.04, x + dx, 1.08, z - 0.2);
+      addBox(lit, C.metalDark, 0.045, 0.18, 0.045, x + dx, 0.86, z - 0.2);
+      screens.push({
+        id: id,
+        x: x + dx,
+        y: 1.08,
+        z: z - 0.17,
+        accent: accent,
+        phase: screens.length * 0.65 + i,
+        speed: 2,
+      });
+    });
     addBox(lit, C.metalDark, 0.32, 0.02, 0.12, x, 0.79, z + 0.02);
-    addBox(lit, C.metalDark, 0.05, 0.018, 0.08, x + 0.28, 0.785, z + 0.1);
     addCyl(lit, accent, 0.045, 0.038, 0.07, x - 0.48, 0.82, z + 0.16, 6);
     addBox(lit, C.paper, 0.16, 0.012, 0.2, x + 0.42, 0.785, z - 0.08);
-    block("desk:" + id, x - 0.68, z - 0.33, x + 0.68, z + 0.33);
+    block("desk:" + id, x - 0.7, z - 0.34, x + 0.7, z + 0.34);
     addShadow(x, z + 0.15, 1.5, 1.15);
-
-    const screenMat = new THREE.MeshBasicMaterial({
-      map: screenMap,
-      color: accent,
-    });
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.28), screenMat);
-    screen.position.set(x, 1.08, z - 0.2 + 0.03);
-    screen.matrixAutoUpdate = false;
-    screen.updateMatrix();
-    scene.add(screen);
-    screens.push({
-      id: id,
-      material: screenMat,
-      base: new THREE.Color(accent),
-      phase: screens.length * 0.8,
-      speed: 2,
-    });
   }
 
   function addChair(x, z, accent, facing) {
@@ -632,7 +636,7 @@ export function buildOffice(scene, bots, options) {
   glassWallX(NORTH_Z, MEET_DOOR.x1, X1, "wall-meet-e");
   doorX(NORTH_Z, REC_DOOR.x0, REC_DOOR.x1);
   doorX(NORTH_Z, MEET_DOOR.x0, MEET_DOOR.x1);
-  solidZ(SPLIT_X, Z0, NORTH_Z, "wall-split");
+  glassWallZ(SPLIT_X, Z0, NORTH_Z, "wall-split");
 
   solidZ(BREAK_X, BREAK_Z, BREAK_DOOR.z0, "wall-break-a");
   solidZ(BREAK_X, BREAK_DOOR.z1, Z1, "wall-break-b");
@@ -652,17 +656,18 @@ export function buildOffice(scene, bots, options) {
   addLamp(-5.9, -6.2);
   addLamp(-3.2, -4.6);
 
-  // --- meeting room --------------------------------------------------------
+  // --- boardroom (glass walls, long table) --------------------------------
 
-  addBox(lit, C.woodDark, 3.05, 0.08, 1.15, 6.3, 0.74, -5.2);
-  [[-1.35, -0.42], [1.35, -0.42], [-1.35, 0.42], [1.35, 0.42]].forEach((p) => {
-    addBox(lit, C.woodDark, 0.08, 0.7, 0.08, 6.3 + p[0], 0.35, -5.2 + p[1]);
+  addBox(lit, "#241c18", 4.05, 0.08, 1.2, 6.3, 0.74, -5.2);
+  addBox(glow, BRAND.colors.teal, 3.5, 0.018, 0.06, 6.3, 0.79, -5.2);
+  [[-1.9, -0.48], [1.9, -0.48], [-1.9, 0.48], [1.9, 0.48]].forEach((p) => {
+    addBox(lit, C.metalDark, 0.07, 0.7, 0.07, 6.3 + p[0], 0.35, -5.2 + p[1]);
   });
-  block("table", 6.3 - 1.52, -5.2 - 0.58, 6.3 + 1.52, -5.2 + 0.58);
-  addShadow(6.3, -5.2, 3.2, 1.4);
-  [5.2, 6.3, 7.4].forEach((x) => {
-    addChair(x, -4.12, C.chair, "north");
-    addChair(x, -6.28, C.chair, "south");
+  block("table", 4.28, -5.8, 8.32, -4.6);
+  addShadow(6.3, -5.2, 4.2, 1.4);
+  [4.7, 5.8, 6.8, 7.8].forEach((x) => {
+    addChair(x, -4.05, C.chair, "north");
+    addChair(x, -6.35, C.chair, "south");
   });
   addPlant(1.35, -6.7, 1.05, "plant-meet-w");
   addPlant(9.2, -4.15, 0.75, "plant-meet-e");
@@ -674,11 +679,19 @@ export function buildOffice(scene, bots, options) {
 
   // --- break room ----------------------------------------------------------
 
-  addBox(lit, C.counterBody, 0.55, 0.92, 2.15, 9.45, 0.46, 6.35);
-  addBox(lit, C.counter, 0.6, 0.05, 2.2, 9.45, 0.94, 6.35);
+  addBox(lit, "#2c333c", 0.55, 0.92, 2.15, 9.45, 0.46, 6.35);
+  addBox(lit, "#d9c7a4", 0.6, 0.05, 2.2, 9.45, 0.94, 6.35);
+  addBox(glow, BRAND.colors.amber, 0.46, 0.02, 2.0, 9.22, 0.97, 6.35);
   block("counter", 9.15, 5.25, 9.78, 7.45);
   addBox(lit, C.fridge, 0.62, 1.45, 0.58, 9.4, 0.74, 2.95);
   block("fridge", 9.08, 2.66, 9.72, 3.24);
+  addBox(lit, "#1c222c", 0.32, 0.36, 0.28, 9.42, 1.16, 5.55);
+  addBox(glow, "#ffb15a", 0.06, 0.05, 0.04, 9.24, 1.22, 5.55);
+  addCyl(lit, "#e23b4a", 0.045, 0.045, 0.2, 9.42, 1.08, 7.05, 6);
+  addCyl(lit, "#f0b429", 0.045, 0.045, 0.2, 9.42, 1.08, 6.72, 6);
+  addCyl(lit, "#6dcea0", 0.045, 0.045, 0.2, 9.42, 1.08, 6.4, 6);
+  addCyl(lit, "#f7f1e8", 0.045, 0.035, 0.07, 9.15, 1.0, 6.15, 6);
+  addCyl(lit, "#f7f1e8", 0.045, 0.035, 0.07, 9.15, 1.0, 5.9, 6);
   addBox(lit, C.metalDark, 0.28, 0.32, 0.32, 8.95, 1.12, 6.9);
   addCyl(lit, C.pot, 0.09, 0.07, 0.08, 8.7, 0.99, 6.15, 6);
   leds.push({ x: 9.05, y: 1.22, z: 6.9, color: "#ff5a4a", blink: false });
@@ -710,27 +723,42 @@ export function buildOffice(scene, bots, options) {
     }
   });
 
-  // Lounge alcove between the meeting room and the break room.
-  addBox(lit, C.sofa, 1.25, 0.38, 0.48, 8.55, 0.28, 0.48);
-  addBox(lit, C.sofa, 1.25, 0.42, 0.12, 8.55, 0.52, 0.68);
-  block("sofa", 7.9, 0.22, 9.2, 0.74);
-  addShadow(8.55, 0.5, 1.35, 0.7);
-  addBox(lit, C.woodDark, 0.7, 0.06, 0.42, 8.7, 0.34, -1.15);
-  addBox(lit, C.woodDark, 0.06, 0.28, 0.06, 8.48, 0.16, -1.28);
-  addBox(lit, C.woodDark, 0.06, 0.28, 0.06, 8.92, 0.16, -1.02);
-  block("lounge-table", 8.35, -1.36, 9.05, -0.94);
-  addPlant(9.15, -1.8, 0.95, "plant-lounge");
-  addShelf(7.9, -2.16, 1.3, 0.28, "shelf-lounge");
-  addLamp(8.2, 1.15);
+  // Lounge: a long couch against the glass, a return seat, and a coffee table.
+  addBox(lit, "#3d4c66", 0.7, 0.32, 1.35, 9.15, 0.28, 0.65);
+  addBox(lit, "#2e3b52", 0.16, 0.42, 1.35, 9.48, 0.5, 0.65);
+  addBox(lit, "#4d6280", 0.28, 0.1, 0.55, 9.05, 0.46, 0.35);
+  addBox(lit, "#4d6280", 0.28, 0.1, 0.55, 9.05, 0.46, 0.98);
+  addBox(lit, "#3d4c66", 1.15, 0.32, 0.55, 8.35, 0.28, 1.45);
+  addBox(lit, "#2e3b52", 1.15, 0.38, 0.14, 8.35, 0.52, 1.68);
+  block("sofa-back", 9.38, 0.0, 9.62, 1.35);
+  block("sofa-return", 7.75, 1.55, 8.95, 1.78);
+  addShadow(9.1, 0.7, 0.9, 1.4);
+  addBox(lit, "#cbb89a", 0.7, 0.05, 0.42, 8.35, 0.36, 1.2);
+  addBox(lit, C.metalDark, 0.04, 0.3, 0.04, 8.1, 0.16, 1.05);
+  addBox(lit, C.metalDark, 0.04, 0.3, 0.04, 8.6, 0.16, 1.35);
+  block("lounge-table", 8.0, 0.99, 8.7, 1.41);
+  addPlant(7.55, 1.85, 0.75, "plant-lounge");
+  addLamp(8.15, 0.15);
+
+  // Arcade cabinet against the boardroom wall. The player stands south of it.
+  addBox(lit, "#161b22", 0.62, 1.45, 0.42, 9.35, 0.74, -2.22);
+  addBox(lit, C.bezel, 0.46, 0.32, 0.04, 9.35, 1.15, -2.0);
+  addBox(glow, "#3ddecb", 0.36, 0.22, 0.02, 9.35, 1.15, -1.97);
+  addBox(glow, BRAND.colors.amber, 0.5, 0.03, 0.08, 9.35, 0.55, -1.98);
+  block("arcade", 9.04, -2.43, 9.66, -2.01);
 
   // A small pause spot between the desk rows and the east corridor.
   addPlant(2.35, 2.75, 1.15, "plant-mid");
-  addCyl(lit, C.metalDark, 0.04, 0.08, 1.15, 2.05, 0.58, 6.15, 5);
-  addCone(lit, C.shade, 0.2, 0.16, 2.05, 1.22, 6.15);
-  addSphere(glow, C.bulb, 0.05, 2.05, 1.18, 6.15);
-  block("floor-lamp", 1.92, 6.02, 2.18, 6.28);
-  addSphere(lit, C.sofa, 0.28, 2.45, 0.22, 5.65);
-  block("beanbag", 2.2, 5.4, 2.7, 5.9);
+  // Ping-pong table between the desk aisles. Players stand off the walk lines.
+  addBox(lit, "#1e6b4a", 1.02, 0.05, 1.85, 2.35, 0.76, 5.55);
+  addBox(lit, "#f4f7f2", 1.02, 0.012, 0.025, 2.35, 0.79, 5.55);
+  addBox(lit, "#f7f3ea", 0.02, 0.14, 1.02, 2.35, 0.88, 5.55);
+  [[-0.42, -0.78], [0.42, -0.78], [-0.42, 0.78], [0.42, 0.78]].forEach((p) => {
+    addBox(lit, C.metalDark, 0.05, 0.7, 0.05, 2.35 + p[0], 0.38, 5.55 + p[1]);
+  });
+  block("pong", 1.84, 4.62, 2.86, 6.48);
+  addPlant(-9.55, 3.2, 0.8, "plant-west");
+  addPlant(6.2, 5.55, 0.7, "plant-bar");
 
   // East file cabinet, against the break-room wall and clear of the aisle.
   addBox(lit, C.cabinet, 0.42, 1.12, 0.7, 4.58, 0.56, 2.75);
@@ -749,33 +777,23 @@ export function buildOffice(scene, bots, options) {
   addLamp(-3.4, 4.4);
   addLamp(2.2, 0.1);
 
-  // Poster on the south face of the records/meeting wall, visible from the open office.
+  // Poster on the west wall of the open office, clear of the command screen.
   const poster = new THREE.Mesh(
     new THREE.PlaneGeometry(0.85, 0.85),
     new THREE.MeshBasicMaterial({ map: posterTexture() })
   );
-  poster.position.set(-3.15, 1.55, NORTH_Z + T / 2 + 0.02);
-  poster.matrixAutoUpdate = false;
-  poster.updateMatrix();
+  poster.position.set(X0 + 0.16, 1.55, 4.4);
+  poster.rotation.y = Math.PI / 2;
+  poster.raycast = function () {};
   scene.add(poster);
-  addBox(lit, C.trim, 0.95, 0.95, 0.04, -3.15, 1.55, NORTH_Z + T / 2 + 0.005);
+  addBox(lit, C.trim, 0.04, 0.95, 0.95, X0 + 0.12, 1.55, 4.4);
 
-  const board = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.1, 1.15),
-    new THREE.MeshBasicMaterial({ map: whiteboardTexture() })
-  );
-  board.position.set(6.3, 1.55, Z0 + T / 2 + 0.02);
-  board.matrixAutoUpdate = false;
-  board.updateMatrix();
-  scene.add(board);
-  addBox(lit, C.trim, 2.24, 1.28, 0.04, 6.3, 1.55, Z0 + T / 2 + 0.005);
-
-  // Clock on the open-office side of the north rooms. Hands move in update().
+  // Clock sits above the right end of the command wall.
   const clockFace = new THREE.Mesh(
     new THREE.CircleGeometry(0.26, 20),
     new THREE.MeshBasicMaterial({ map: clockTexture() })
   );
-  clockFace.position.set(-1.15, 1.72, NORTH_Z + T / 2 + 0.03);
+  clockFace.position.set(2.15, 2.05, NORTH_Z + T / 2 + 0.03);
   scene.add(clockFace);
   const clockHands = new THREE.Group();
   clockHands.position.copy(clockFace.position);
@@ -859,10 +877,42 @@ export function buildOffice(scene, bots, options) {
   addLamp(-4.2, 11.6);
   addLamp(1.5, 12.2);
 
-  // Warm and cool strips. They are unlit meshes, not real lights, so they stay cheap.
-  addBox(glow, BRAND.colors.amber, 7.5, 0.035, 0.04, -4.2, 2.34, NORTH_Z + 0.12);
-  addBox(glow, "#8fd4ea", 4.6, 0.035, 0.04, 7.2, 2.34, NORTH_Z + 0.12);
-  addBox(glow, BRAND.colors.amber, 4.2, 0.03, 0.03, -2.5, 2.34, Z1 - 0.12);
+  // Glowing logo wall on the lobby side of the office wall, west of the door.
+  addBox(glow, BRAND.colors.amber, 2.9, 1.55, 0.03, -6.45, 1.48, Z1 + 0.12);
+  addBox(lit, "#14110e", 2.7, 1.38, 0.05, -6.45, 1.48, Z1 + 0.15);
+  const logoCanvas = document.createElement("canvas");
+  logoCanvas.width = 512;
+  logoCanvas.height = 256;
+  const lg = logoCanvas.getContext("2d");
+  lg.fillStyle = "#14110e";
+  lg.fillRect(0, 0, 512, 256);
+  drawLogo(lg, 28, 48, 150);
+  lg.fillStyle = BRAND.colors.cream;
+  lg.font = "700 42px sans-serif";
+  lg.fillText(BRAND.name, 200, 110);
+  lg.fillStyle = BRAND.colors.amber;
+  lg.font = "500 22px sans-serif";
+  lg.fillText(BRAND.tagline, 200, 152);
+  lg.fillRect(200, 176, 220, 4);
+  const logoTex = new THREE.CanvasTexture(logoCanvas);
+  logoTex.colorSpace = THREE.SRGBColorSpace;
+  const logoMat = new THREE.MeshBasicMaterial({ map: logoTex });
+  const logoWall = new THREE.Mesh(new THREE.PlaneGeometry(2.45, 1.18), logoMat);
+  logoWall.position.set(-6.45, 1.48, Z1 + 0.2);
+  logoWall.raycast = function () {};
+  scene.add(logoWall);
+
+  // Emissive strips: ceilings, baseboards, and the boardroom glass line.
+  // They share the glow mesh, so they do not add lights or draw calls.
+  addBox(glow, BRAND.colors.amber, 7.5, 0.04, 0.045, -4.2, 2.36, NORTH_Z + 0.14);
+  addBox(glow, "#3ddecb", 6.2, 0.04, 0.045, 6.4, 2.36, NORTH_Z + 0.14);
+  addBox(glow, BRAND.colors.amber, 8.5, 0.035, 0.04, -3.2, 2.38, 2.4);
+  addBox(glow, "#3ddecb", 6.4, 0.035, 0.04, 6.6, 2.38, -5.3);
+  addBox(glow, BRAND.colors.amber, 8, 0.03, 0.035, -4, 2.36, 10.7);
+  addBox(glow, "#ffb15a", 16.5, 0.04, 0.035, -1, 0.12, Z0 + 0.22);
+  addBox(glow, "#3ddecb", 0.035, 0.04, 12, X0 + 0.22, 0.12, 0.4);
+  addBox(glow, "#ffb15a", 0.035, 0.04, 10, X1 - 0.22, 0.12, 1.2);
+  addBox(glow, BRAND.colors.amber, 6.5, 0.03, 0.03, -2.2, 0.12, Z1 - 0.16);
 
   // Dark baseboards read as contact shadow where the wall meets the floor.
   addBox(lit, "#b3aa9f", 20, 0.08, 0.06, 0, 0.06, Z0 + 0.14);
@@ -927,64 +977,166 @@ export function buildOffice(scene, bots, options) {
   addSign(BREAK_X - 0.14, 1.7, 6.35, 0.62, 0.22, -Math.PI / 2, plaqueV[3][0], plaqueV[3][3], plaqueV[3][2], plaqueV[3][1]);
   addSign(-4.2, 2.05, NORTH_Z + 0.14, 0.7, 0.22, 0, plaqueV[4][0], plaqueV[4][3], plaqueV[4][2], plaqueV[4][1]);
 
-  // Live-looking dashboards share one canvas so both screens are two draws, one texture.
+  // One canvas feeds the command wall and the boardroom screen.
   const dashCanvas = document.createElement("canvas");
-  dashCanvas.width = 512;
-  dashCanvas.height = 256;
+  dashCanvas.width = 1024;
+  dashCanvas.height = 512;
   const dashCtx = dashCanvas.getContext("2d");
   const dashTex = new THREE.CanvasTexture(dashCanvas);
   dashTex.colorSpace = THREE.SRGBColorSpace;
   const dashMat = new THREE.MeshBasicMaterial({ map: dashTex });
   let dashEvery = 3;
   let dashFrame = 0;
+  let qualityLevel = "high";
 
   function drawDashboard(time) {
     const ctx = dashCtx;
     const w = dashCanvas.width;
     const h = dashCanvas.height;
-    ctx.fillStyle = "#14181f";
+    ctx.fillStyle = "#10141c";
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = BRAND.colors.amber;
-    ctx.fillRect(0, 0, w, 6);
+    ctx.fillRect(0, 0, w, 10);
+    ctx.fillStyle = "#3ddecb";
+    ctx.fillRect(0, 10, w, 4);
     ctx.fillStyle = BRAND.colors.cream;
-    ctx.font = "700 22px sans-serif";
-    ctx.fillText(BRAND.name, 16, 36);
-    ctx.font = "500 14px sans-serif";
+    ctx.font = "700 28px sans-serif";
+    ctx.fillText(BRAND.name, 24, 52);
     ctx.fillStyle = "#9fb0c0";
-    ctx.fillText("FLOOR", 16, 58);
-    const bars = [0.45, 0.7, 0.35, 0.85, 0.55, 0.4, 0.75];
+    ctx.font = "500 16px sans-serif";
+    ctx.fillText("FLOOR " + BRAND.floor, 24, 78);
+
+    const bars = [0.42, 0.68, 0.36, 0.82, 0.55, 0.48, 0.74, 0.6];
     bars.forEach((base, i) => {
-      const wobble = 0.5 + 0.5 * Math.sin(time * 1.4 + i);
-      const bh = (0.35 + 0.65 * base * wobble) * 90;
-      ctx.fillStyle = i % 2 ? BRAND.colors.teal : BRAND.colors.amber;
-      ctx.fillRect(20 + i * 28, 170 - bh, 18, bh);
+      const wobble = 0.55 + 0.45 * Math.sin(time * 1.3 + i * 0.7);
+      const bh = (0.3 + 0.7 * base * wobble) * 250;
+      ctx.fillStyle = i % 2 ? "#3ddecb" : BRAND.colors.amber;
+      ctx.fillRect(28 + i * 42, 360 - bh, 26, bh);
     });
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.strokeRect(16, 96, 360, 276);
+
+    // Bot status grid.
     bots.forEach((bot, i) => {
-      const y = 28 + (i % 9) * 22;
+      const col = i < 5 ? 0 : 1;
+      const row = i % 5;
+      const x = 410 + col * 300;
+      const y = 120 + row * 48;
+      ctx.fillStyle = "#1c2430";
+      ctx.fillRect(x, y, 270, 40);
       ctx.fillStyle = bot.accent || BRAND.colors.amber;
-      ctx.beginPath();
-      ctx.arc(250, y, 6, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(x, y, 8, 40);
       ctx.fillStyle = "#e7eef4";
-      ctx.font = "600 13px sans-serif";
-      ctx.fillText(bot.name, 266, y + 4);
+      ctx.font = "600 16px sans-serif";
+      ctx.fillText(bot.name, x + 18, y + 26);
       ctx.fillStyle = "#9fb0c0";
-      ctx.font = "13px sans-serif";
-      ctx.fillText(bot.status, 400, y + 4);
+      ctx.font = "14px sans-serif";
+      ctx.fillText(bot.status, x + 150, y + 26);
     });
+
+    // Radar. Low quality draws the dish without the sweep trail.
+    const cx = 860;
+    const cy = 250;
+    ctx.strokeStyle = "#3ddecb";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 78, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - 78, cy);
+    ctx.lineTo(cx + 78, cy);
+    ctx.moveTo(cx, cy - 78);
+    ctx.lineTo(cx, cy + 78);
+    ctx.stroke();
+    if (qualityLevel !== "low") {
+      const ang = time * 1.4;
+      ctx.strokeStyle = BRAND.colors.amber;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(ang) * 74, cy + Math.sin(ang) * 74);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#ffb15a";
+    ctx.beginPath();
+    ctx.arc(cx + 22, cy - 18, 4, 0, Math.PI * 2);
+    ctx.arc(cx - 30, cy + 20, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ticker along the bottom.
+    ctx.fillStyle = "#0c1016";
+    ctx.fillRect(0, h - 48, w, 48);
+    ctx.fillStyle = BRAND.colors.amber;
+    ctx.fillRect(0, h - 48, w, 3);
+    ctx.fillStyle = BRAND.colors.cream;
+    ctx.font = "600 20px sans-serif";
+    const ticker = bots.map((bot) => bot.name + "  " + bot.status).join("     ·     ") + "     ·     ";
+    const shift = Math.floor(time * 70) % 640;
+    ctx.fillText(ticker, 20 - shift, h - 16);
+    ctx.fillText(ticker, 660 - shift, h - 16);
   }
   drawDashboard(0);
 
-  function addDashboard(x, y, z, w, h, rotY) {
+  function addDashboard(x, y, z, w, h) {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), dashMat);
     mesh.position.set(x, y, z);
-    if (rotY) mesh.rotation.y = rotY;
     mesh.raycast = function () {};
     scene.add(mesh);
-    addBox(lit, C.bezel, w + 0.08, h + 0.08, 0.04, x, y, z - 0.03);
+    addBox(lit, C.bezel, w + 0.1, h + 0.1, 0.05, x, y, z - 0.04);
+    addBox(glow, BRAND.colors.amber, w + 0.16, 0.025, 0.02, x, y - h / 2 - 0.04, z);
   }
-  addDashboard(2.15, 1.45, NORTH_Z + 0.16, 1.35, 0.72, 0);
-  addDashboard(-6.2, 1.45, Z1 + 0.16, 1.2, 0.64, 0);
+  // Command wall, facing the open office. Boardroom screen faces into the glass room.
+  addDashboard(-1.15, 1.32, NORTH_Z + 0.18, 5.6, 1.15);
+  addDashboard(6.3, 1.48, Z0 + 0.16, 2.4, 1.05);
+
+  // Framed art and the coffee-bar menu share one texture.
+  const artCanvas = document.createElement("canvas");
+  artCanvas.width = 512;
+  artCanvas.height = 256;
+  const ag = artCanvas.getContext("2d");
+  ag.fillStyle = "#1f4f5c";
+  ag.fillRect(0, 0, 256, 256);
+  ag.fillStyle = "#f0b429";
+  ag.beginPath();
+  ag.moveTo(40, 210);
+  ag.lineTo(90, 40);
+  ag.lineTo(150, 210);
+  ag.fill();
+  ag.fillStyle = "#f7f3ea";
+  ag.beginPath();
+  ag.arc(180, 90, 36, 0, Math.PI * 2);
+  ag.fill();
+  ag.fillStyle = "#14323c";
+  ag.fillRect(256, 0, 256, 256);
+  ag.fillStyle = "#ffb15a";
+  ag.font = "700 42px sans-serif";
+  ag.fillText("COFFEE", 280, 110);
+  ag.fillStyle = "#6dcea0";
+  ag.fillText("JUICE", 300, 168);
+  const artTex = new THREE.CanvasTexture(artCanvas);
+  artTex.colorSpace = THREE.SRGBColorSpace;
+  const artMat = new THREE.MeshBasicMaterial({ map: artTex });
+  const artGeos = [];
+  function addArt(x, y, z, w, h, rotY, u0, u1) {
+    const g = new THREE.PlaneGeometry(w, h);
+    if (rotY) g.rotateY(rotY);
+    g.translate(x, y, z);
+    const uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i += 1) {
+      uv.setXY(i, u0 + uv.getX(i) * (u1 - u0), uv.getY(i));
+    }
+    artGeos.push(g);
+    addBox(lit, C.trim, rotY ? 0.04 : w + 0.08, h + 0.08, rotY ? w + 0.08 : 0.04, x, y, z);
+  }
+  addArt(7.15, 1.7, NORTH_Z + 0.16, 0.7, 0.7, 0, 0, 0.5);
+  addArt(9.12, 1.7, 6.35, 0.62, 0.55, -Math.PI / 2, 0.5, 1);
+  const artMerged = mergeGeometries(artGeos, false);
+  artGeos.forEach((g) => g.dispose());
+  const artMesh = new THREE.Mesh(artMerged, artMat);
+  artMesh.raycast = function () {};
+  scene.add(artMesh);
 
   // --- walking graph -------------------------------------------------------
 
@@ -1063,12 +1215,20 @@ export function buildOffice(scene, bots, options) {
   node("ln-n", 6.5, -1.65);
   node("ln-mid", 6.5, -0.3);
   node("ln-s", 6.5, 1.25);
-  node("ln-seat", 7.45, -0.3, Math.PI / 2);
+  node("ln-seat", 8.95, 0.65, -Math.PI / 2);
+  node("gm-arcade", 8.15, -1.55, Math.PI / 2);
+  node("pp-n", 2.35, 3.85, 0);
+  node("pp-s", 2.35, 6.85, Math.PI);
   link("ln-n", gid(3.6, AZ[0]));
   link("ln-n", "ln-mid");
   link("ln-mid", "ln-s");
   link("ln-s", gid(3.6, AZ[1]));
   link("ln-mid", "ln-seat");
+  link("ln-n", "gm-arcade");
+  link("pp-n", gid(1.2, 4.3));
+  link("pp-n", gid(3.6, 4.3));
+  link("pp-s", gid(1.2, 7.15));
+  link("pp-s", gid(3.6, 7.15));
 
   node("lb-door", -2.5, 8.55);
   node("lb-mid", -2.5, 10.15);
@@ -1141,7 +1301,7 @@ export function buildOffice(scene, bots, options) {
     return null;
   }
 
-  const spotIds = ["sv-files", "sv-rack", "cab-east", "br-hang", "br-coffee", "mt-north", "mt-s-mid", "ln-seat", "lb-wait", "lb-logo", "ex-view"];
+  const spotIds = ["sv-files", "sv-rack", "cab-east", "br-hang", "br-coffee", "mt-north", "mt-s-mid", "ln-seat", "gm-arcade", "pp-n", "pp-s", "lb-wait", "lb-logo", "ex-view"];
   Object.keys(desks).forEach((id) => {
     spotIds.push(desks[id].seat, desks[id].front);
   });
@@ -1201,6 +1361,29 @@ export function buildOffice(scene, bots, options) {
 
   merge(lit, litMat);
   merge(glow, glowMat);
+
+  let screenMesh = null;
+  if (screens.length) {
+    screenMesh = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(0.4, 0.26),
+      new THREE.MeshBasicMaterial({ map: screenMap }),
+      screens.length
+    );
+    const screenDummy = new THREE.Object3D();
+    screens.forEach((spot, i) => {
+      spot.base = new THREE.Color(spot.accent);
+      screenDummy.position.set(spot.x, spot.y, spot.z);
+      screenDummy.rotation.set(0, 0, 0);
+      screenDummy.updateMatrix();
+      screenMesh.setMatrixAt(i, screenDummy.matrix);
+      screenMesh.setColorAt(i, spot.base);
+    });
+    screenMesh.instanceMatrix.needsUpdate = true;
+    if (screenMesh.instanceColor) screenMesh.instanceColor.needsUpdate = true;
+    screenMesh.frustumCulled = false;
+    screenMesh.raycast = function () {};
+    scene.add(screenMesh);
+  }
   merge(glass, glassMat);
   merge(panes, paneMat);
   merge(signs, signMat);
@@ -1396,7 +1579,9 @@ export function buildOffice(scene, bots, options) {
   scene.add(floorSign);
 
   function setQuality(level) {
+    qualityLevel = level;
     dashEvery = level === "low" ? 12 : 3;
+    if (artMesh) artMesh.visible = level !== "low";
   }
 
   function setNight(on) {
@@ -1404,21 +1589,28 @@ export function buildOffice(scene, bots, options) {
     towerMat.color.set(on ? 0xffffff : 0xc9d2dc);
     lowMat.emissiveIntensity = on ? 1.1 : 0.05;
     lowMat.color.set(on ? 0xfff4dc : 0x6a7380);
-    // Vertex colors on the lamps get multiplied by this, so night makes them bloom.
-    if (on) glowMat.color.setRGB(1.85, 1.6, 1.2);
+    // Vertex colors on the lamps and LED strips get multiplied by this.
+    if (on) glowMat.color.setRGB(2.15, 1.85, 1.35);
     else glowMat.color.setRGB(1, 1, 1);
+    if (logoMat) logoMat.color.setRGB(on ? 1.45 : 1, on ? 1.28 : 1, on ? 1.05 : 1);
   }
 
+  const screenPulse = new THREE.Color();
   function update(time) {
     dashFrame += 1;
     if (dashFrame % dashEvery === 0) {
       drawDashboard(time);
       dashTex.needsUpdate = true;
     }
-    for (let i = 0; i < screens.length; i += 1) {
-      const s = screens[i];
-      const pulse = 0.8 + 0.2 * Math.sin(time * s.speed + s.phase);
-      s.material.color.copy(s.base).multiplyScalar(pulse);
+    const screenStep = qualityLevel === "low" ? 4 : 1;
+    if (screenMesh && dashFrame % screenStep === 0) {
+      for (let i = 0; i < screens.length; i += 1) {
+        const s = screens[i];
+        const pulse = 0.78 + 0.22 * Math.sin(time * s.speed + s.phase);
+        screenPulse.copy(s.base).multiplyScalar(pulse);
+        screenMesh.setColorAt(i, screenPulse);
+      }
+      if (screenMesh.instanceColor) screenMesh.instanceColor.needsUpdate = true;
     }
     if (ledMesh) {
       for (let i = 0; i < leds.length; i += 1) {

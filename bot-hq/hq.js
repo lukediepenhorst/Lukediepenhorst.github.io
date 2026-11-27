@@ -334,7 +334,8 @@ function startScene(botInfos) {
 
   renderer.domElement.addEventListener("pointerdown", (event) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
-    if (intro) endIntro();
+    if (intro) endIntro(false);
+    if (tour || tourArm) stopTour();
     down = { x: event.clientX, y: event.clientY, id: event.pointerId, type: event.pointerType };
   });
   window.addEventListener("pointerup", (event) => {
@@ -391,6 +392,7 @@ function startScene(botInfos) {
   }
   controls.addEventListener("start", () => {
     tween = null;
+    if (tour || tourArm) stopTour();
     hideHint();
   });
   window.setTimeout(hideHint, 7000);
@@ -430,13 +432,124 @@ function startScene(botInfos) {
     camera.lookAt(intro.fromTgt);
     if (introSkip) introSkip.hidden = false;
   }
-  function endIntro() {
+  function endIntro(playTour) {
     if (!intro) return;
     intro = null;
     frameHome();
     // Same settle as Reset view, so the orbit doesn't drift off the home pose.
     for (let i = 0; i < 80; i += 1) controls.update();
     if (introSkip) introSkip.hidden = true;
+    if (playTour) armTour();
+  }
+
+  // A glide through the rooms. Each stop is where the camera looks next.
+  const TOUR_STOPS = [
+    { pos: [18, 17.5, 24], target: [-1.2, 0.5, 0.4], dur: 1.2 },
+    { pos: [6, 12, 14], target: [-2, 1.2, 4], dur: 3 },
+    { pos: [-1.5, 3.6, 11.6], target: [-6.4, 1.45, 8.2], dur: 3.2 },
+    { pos: [3.2, 3.4, 11.2], target: [1.5, 1.05, 10.5], dur: 2.8 },
+    { pos: [5, 6.5, 8], target: [-3, 1, 2], dur: 3.4 },
+    { pos: [-1.1, 2.8, 2.8], target: [-1.15, 1.3, -2.4], dur: 3.6 },
+    { pos: [3.8, 3.2, -1.2], target: [6.3, 1.15, -5.3], dur: 3.4 },
+    { pos: [5.2, 3.2, 2.6], target: [8.9, 0.85, 0.3], dur: 3.2 },
+    { pos: [5.8, 3.0, 4.4], target: [9.2, 1.1, 6.3], dur: 2.8 },
+    { pos: [18, 17.5, 24], target: [-1.2, 0.5, 0.4], dur: 2 },
+  ];
+  let tour = null;
+  let tourArm = 0;
+  const tourButton = document.getElementById("btn-tour");
+  function syncTourButton() {
+    if (!tourButton) return;
+    const on = !!tour;
+    tourButton.textContent = on ? "Stop" : "Tour";
+    tourButton.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+  function cancelArm() {
+    if (tourArm) {
+      window.clearTimeout(tourArm);
+      tourArm = 0;
+    }
+  }
+  function armTour() {
+    if (reduce || debug) return;
+    cancelArm();
+    tourArm = window.setTimeout(() => {
+      tourArm = 0;
+      startTour();
+    }, 1600);
+  }
+  function stopTour() {
+    cancelArm();
+    if (!tour) {
+      syncTourButton();
+      return;
+    }
+    tour = null;
+    syncTourButton();
+    controls.update();
+  }
+  function startTour() {
+    if (reduce) return;
+    cancelArm();
+    if (intro) endIntro(false);
+    stopFollow();
+    tween = null;
+    const home = homeView();
+    const stops = TOUR_STOPS.map((stop, index) => {
+      if (index === 0 || index === TOUR_STOPS.length - 1) {
+        return {
+          pos: [home.pos[0], home.pos[1], home.pos[2]],
+          target: [home.target[0], home.target[1], home.target[2]],
+          dur: stop.dur,
+        };
+      }
+      return stop;
+    });
+    tour = { t: 0, stops: stops };
+    camera.position.set(stops[0].pos[0], stops[0].pos[1], stops[0].pos[2]);
+    controls.target.set(stops[0].target[0], stops[0].target[1], stops[0].target[2]);
+    camera.lookAt(controls.target);
+    syncTourButton();
+  }
+  function stepTour(raw) {
+    if (!tour) return;
+    tour.t += Math.min(raw, 0.05);
+    let elapsed = tour.t;
+    const stops = tour.stops;
+    let i = 0;
+    while (i < stops.length - 1 && elapsed > stops[i].dur) {
+      elapsed -= stops[i].dur;
+      i += 1;
+    }
+    if (i >= stops.length - 1) {
+      camera.position.set(stops[i].pos[0], stops[i].pos[1], stops[i].pos[2]);
+      controls.target.set(stops[i].target[0], stops[i].target[1], stops[i].target[2]);
+      camera.lookAt(controls.target);
+      tour = null;
+      syncTourButton();
+      for (let n = 0; n < 80; n += 1) controls.update();
+      return;
+    }
+    const k = smoothstep(Math.min(1, elapsed / stops[i].dur));
+    const a = stops[i];
+    const b = stops[i + 1];
+    camera.position.set(
+      a.pos[0] + (b.pos[0] - a.pos[0]) * k,
+      a.pos[1] + (b.pos[1] - a.pos[1]) * k,
+      a.pos[2] + (b.pos[2] - a.pos[2]) * k
+    );
+    controls.target.set(
+      a.target[0] + (b.target[0] - a.target[0]) * k,
+      a.target[1] + (b.target[1] - a.target[1]) * k,
+      a.target[2] + (b.target[2] - a.target[2]) * k
+    );
+    camera.lookAt(controls.target);
+  }
+  if (tourButton) {
+    tourButton.addEventListener("click", () => {
+      if (tour) stopTour();
+      else startTour();
+    });
   }
 
   function clampTarget() {
@@ -527,7 +640,7 @@ function startScene(botInfos) {
       if (quality === "high" && slowTime > 1.6) {
         quality = "low";
         office.setQuality("low");
-        if (intro) endIntro();
+        if (intro) endIntro(false);
         resize();
       } else if (quality === "low" && smoothTime > 2.5) {
         quality = "high";
@@ -548,7 +661,9 @@ function startScene(botInfos) {
       camera.position.lerpVectors(intro.fromPos, intro.toPos, k);
       controls.target.lerpVectors(intro.fromTgt, intro.toTgt, k);
       camera.lookAt(controls.target);
-      if (intro.t >= hold + move) endIntro();
+      if (intro.t >= hold + move) endIntro(true);
+    } else if (tour) {
+      stepTour(raw);
     } else if (tween) {
       tween.t += raw / 0.7;
       const k = smoothstep(Math.min(1, tween.t));
@@ -590,9 +705,9 @@ function startScene(botInfos) {
       }
     }
 
-    if (!tween && !intro) controls.update();
-    // The opening shot looks at the sign above the floor, outside the orbit box.
-    if (!intro) clampTarget();
+    if (!tween && !intro && !tour) controls.update();
+    // The opening shot and the tour look outside the orbit box.
+    if (!intro && !tour) clampTarget();
 
     const selected = window.BotHQ ? window.BotHQ.selectedId : null;
     const selectedBot = selected ? crew.get(selected) : null;
@@ -680,6 +795,9 @@ function startScene(botInfos) {
     },
     isIntro: function () {
       return !!intro;
+    },
+    isTour: function () {
+      return !!tour;
     },
     camera: function () {
       return {
