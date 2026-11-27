@@ -9,6 +9,7 @@
 export const BRAND = {
   name: "Luke's Bot HQ",
   tagline: "Nine bots. One office.",
+  floor: 42,
   colors: {
     ink: "#1c1612",
     amber: "#ffb15a",

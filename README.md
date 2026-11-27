@@ -7,7 +7,7 @@ Live site: https://lukediepenhorst.github.io
 ## Pages
 
 - [Luke Diepenhorst - Projects](https://lukediepenhorst.github.io/) — landing page
-- [Luke's Bot HQ](https://lukediepenhorst.github.io/bot-hq/) — branded low-poly HQ where nine bots walk, meet, and carry files
+- [Luke's Bot HQ](https://lukediepenhorst.github.io/bot-hq/) — a low-poly New York high-rise floor where nine bots walk, meet, and carry files
 - [Tulip City Lawn Care](https://lukediepenhorst.github.io/tulip-city-lawn-care/) — fictional demo business (Holland, Michigan)
 - [Honolulu Blue Tailgate Co.](https://lukediepenhorst.github.io/honolulu-blue-tailgate/) — fictional demo business (Detroit watch-party site; not affiliated with the NFL or the Detroit Lions)
 

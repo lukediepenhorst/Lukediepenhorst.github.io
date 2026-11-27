@@ -75,7 +75,7 @@ const C = {
   wall: "#f6f1e8",
   wallDeep: "#e7d9c8",
   trim: "#c48958",
-  desk: "#f8f3ea",
+  desk: "#6b4330",
   chair: "#2c313a",
   metal: "#9098a4",
   metalDark: "#262c34",
@@ -458,6 +458,35 @@ export function buildOffice(scene, bots, options) {
     }
   }
 
+  // Floor-to-ceiling glass. Mullions are thin metal; the glass itself is one merged sheet.
+  function curtainX(z, x0, x1) {
+    const w = Math.abs(x1 - x0);
+    if (w < 0.08) return;
+    const cx = (x0 + x1) / 2;
+    addBox(lit, "#e4dfd8", w, 0.12, T + 0.02, cx, 0.06, z);
+    addBox(lit, C.metalDark, w, 0.06, T + 0.04, cx, WALL_H - 0.03, z);
+    const posts = Math.max(1, Math.round(w / 2.6));
+    for (let i = 0; i <= posts; i += 1) {
+      const x = x0 + (w * i) / posts;
+      addBox(lit, C.metalDark, 0.05, WALL_H - 0.16, 0.08, x, (WALL_H * 0.5) + 0.02, z);
+    }
+    addPlane(panes, Math.max(0.2, w - 0.12), WALL_H - 0.22, cx, WALL_H * 0.52, z, 0);
+  }
+
+  function curtainZ(x, z0, z1) {
+    const d = Math.abs(z1 - z0);
+    if (d < 0.08) return;
+    const cz = (z0 + z1) / 2;
+    addBox(lit, "#e4dfd8", T + 0.02, 0.12, d, x, 0.06, cz);
+    addBox(lit, C.metalDark, T + 0.04, 0.06, d, x, WALL_H - 0.03, cz);
+    const posts = Math.max(1, Math.round(d / 2.6));
+    for (let i = 0; i <= posts; i += 1) {
+      const z = z0 + (d * i) / posts;
+      addBox(lit, C.metalDark, 0.08, WALL_H - 0.16, 0.05, x, (WALL_H * 0.5) + 0.02, z);
+    }
+    addPlane(panes, Math.max(0.2, d - 0.12), WALL_H - 0.22, x, WALL_H * 0.52, cz, Math.PI / 2);
+  }
+
   function addPlant(x, z, scale, name) {
     const s = scale;
     addCyl(lit, C.pot, 0.16 * s, 0.12 * s, 0.18 * s, x, 0.09 * s, z, 6);
@@ -605,23 +634,13 @@ export function buildOffice(scene, bots, options) {
   block("outer-w", X0 - T / 2, Z0, X0 + T / 2, Z1);
   block("outer-e", X1 - T / 2, Z0, X1 + T / 2, Z1);
 
-  wallRunX(Z0, X0, X1, [
-    { x0: -8.7, x1: -3.4, ...winY },
-    { x0: 1.8, x1: 8.4, ...winY },
-  ]);
-  wallRunX(Z1, X0, -3.3, [{ x0: -8.2, x1: -4.4, ...winY }]);
-  wallRunX(Z1, -1.7, BREAK_X, []);
-  wallRunX(Z1, BREAK_X, X1, [{ x0: 6.1, x1: 8.9, ...winY }]);
+  curtainX(Z0, X0, X1);
+  curtainX(Z1, X0, -3.3);
+  curtainX(Z1, -1.7, BREAK_X);
+  curtainX(Z1, BREAK_X, X1);
   doorX(Z1, -3.3, -1.7);
-  // East/west visuals fit between the north and south walls so corners do not z-fight.
-  wallRunZ(X0, Z0 + T / 2, Z1 - T / 2, [
-    { z0: -6.7, z1: -3.6, ...winY },
-    { z0: 0.4, z1: 5.4, ...winY },
-  ]);
-  wallRunZ(X1, Z0 + T / 2, Z1 - T / 2, [
-    { z0: -6.7, z1: -3.5, ...winY },
-    { z0: 3.5, z1: 6.5, ...winY },
-  ]);
+  curtainZ(X0, Z0 + T / 2, Z1 - T / 2);
+  curtainZ(X1, Z0 + T / 2, Z1 - T / 2);
 
   solidX(NORTH_Z, X0, REC_DOOR.x0, "wall-rec-w");
   solidX(NORTH_Z, REC_DOOR.x1, MEET_DOOR.x0, "wall-mid");
@@ -789,16 +808,46 @@ export function buildOffice(scene, bots, options) {
 
   const LZ = 13.15;
   const LX1 = 5;
-  addBox(lit, "#ddd4c8", 14.9, 0.06, 5.35, (X0 + LX1) / 2, 0.05, (Z1 + LZ) / 2);
+  addBox(lit, "#e7e2da", 14.9, 0.06, 5.35, (X0 + LX1) / 2, 0.05, (Z1 + LZ) / 2);
+  addBox(lit, "#d4cdc3", 8, 0.012, 0.08, -2, 0.09, 10.6);
   addBox(lit, C.rug, 3.2, 0.02, 2.2, -6.4, 0.07, 11.3);
   addBox(lit, "#e7d3b4", 2.4, 0.02, 1.6, 1.55, 0.07, 10.2);
 
   block("lb-w", X0 - T / 2, Z1, X0 + T / 2, LZ);
-  block("lb-e", LX1 - T / 2, Z1, LX1 + T / 2, LZ);
+  // Door into the corner office sits in this wall. The gap is the walkway.
+  block("lb-e-a", LX1 - T / 2, Z1, LX1 + T / 2, 8.85);
+  block("lb-e-b", LX1 - T / 2, 10.25, LX1 + T / 2, LZ);
   block("lb-s", X0, LZ - T / 2, LX1, LZ + T / 2);
-  wallRunZ(X0, Z1 + T / 2, LZ - T / 2, [{ z0: 9.4, z1: 11.8, ...winY }]);
-  wallRunZ(LX1, Z1 + T / 2, LZ - T / 2, []);
-  wallRunX(LZ, X0 + T / 2, LX1 - T / 2, [{ x0: -7.2, x1: -2.2, ...winY }]);
+  curtainZ(X0, Z1 + T / 2, LZ - T / 2);
+  curtainX(LZ, X0 + T / 2, LX1 - T / 2);
+  // Glass partition with a door, facing the lobby. glassWallX only runs along x, so this one is built by hand.
+  addBox(lit, "#e4dfd8", T + 0.02, 0.12, 8.85 - Z1, LX1, 0.06, (Z1 + 8.85) / 2);
+  addBox(lit, "#e4dfd8", T + 0.02, 0.12, LZ - 10.25, LX1, 0.06, (10.25 + LZ) / 2);
+  addPlane(panes, 8.85 - Z1 - 0.1, WALL_H - 0.28, LX1, 1.3, (Z1 + 8.85) / 2, Math.PI / 2);
+  addPlane(panes, LZ - 10.25 - 0.1, WALL_H - 0.28, LX1, 1.3, (10.25 + LZ) / 2, Math.PI / 2);
+  doorZ(LX1, 8.85, 10.25);
+
+  // Elevator bank on the south glass, inside the lobby. Paths stay north of z = 11.
+  addBox(lit, "#232830", 0.62, 2.15, 0.08, -1.55, 1.12, LZ - 0.22);
+  addBox(lit, "#232830", 0.62, 2.15, 0.08, -0.85, 1.12, LZ - 0.22);
+  addBox(glow, BRAND.colors.amber, 0.04, 1.7, 0.02, -1.2, 1.15, LZ - 0.28);
+  addBox(lit, C.metal, 0.08, 0.08, 0.08, -1.2, 1.05, LZ - 0.3);
+
+  // Corner executive office, east of the lobby, with glass on the city side.
+  addBox(lit, "#e7e2da", 5.2, 0.06, 5.2, 7.5, 0.05, (Z1 + LZ) / 2);
+  addBox(lit, "#5c3d2e", 2.05, 0.08, 0.95, 8.15, 0.8, 11.55);
+  [[-0.85, -0.35], [0.85, -0.35], [-0.85, 0.35], [0.85, 0.35]].forEach((p) => {
+    addBox(lit, C.woodDark, 0.08, 0.72, 0.08, 8.15 + p[0], 0.38, 11.55 + p[1]);
+  });
+  block("exec-desk", 7.1, 11.05, 9.2, 12.05);
+  addShadow(8.15, 11.55, 2.2, 1.15);
+  addChair(6.85, 11.55, BRAND.colors.amber, "east");
+  addPlant(9.15, 9.35, 0.9, "plant-exec");
+  addBox(lit, C.rug, 2.6, 0.015, 1.8, 7.6, 0.07, 11.2);
+  curtainZ(X1, Z1 + T / 2, LZ - T / 2);
+  curtainX(LZ, LX1 + T / 2, X1 - T / 2);
+  block("ex-e", X1 - T / 2, Z1, X1 + T / 2, LZ);
+  block("ex-s", LX1, LZ - T / 2, X1, LZ + T / 2);
 
   // Reception desk. Kept east of the x = -2.5 hallway.
   addBox(lit, C.desk, 1.7, 0.08, 0.62, 1.55, 0.78, 10.75);
@@ -1039,6 +1088,12 @@ export function buildOffice(scene, bots, options) {
   link("lb-door", "lb-mid");
   link("lb-mid", "lb-wait");
   link("lb-mid", "lb-logo");
+  node("ex-hall", 3.5, 9.55);
+  node("ex-door", 5.75, 9.55);
+  node("ex-view", 6.55, 10.55, Math.PI / 2);
+  link("lb-logo", "ex-hall");
+  link("ex-hall", "ex-door");
+  link("ex-door", "ex-view");
 
   function pointBlocked(x, z) {
     for (let i = 0; i < blocks.length; i += 1) {
@@ -1096,7 +1151,7 @@ export function buildOffice(scene, bots, options) {
     return null;
   }
 
-  const spotIds = ["sv-files", "sv-rack", "cab-east", "br-hang", "br-coffee", "mt-north", "mt-s-mid", "ln-seat", "lb-wait", "lb-logo"];
+  const spotIds = ["sv-files", "sv-rack", "cab-east", "br-hang", "br-coffee", "mt-north", "mt-s-mid", "ln-seat", "lb-wait", "lb-logo", "ex-view"];
   Object.keys(desks).forEach((id) => {
     spotIds.push(desks[id].seat, desks[id].front);
   });
@@ -1185,8 +1240,111 @@ export function buildOffice(scene, bots, options) {
 
   if (debug) addDebug(scene, nodes, edgeList, pathErrors);
 
+  const towerTex = document.createElement("canvas");
+  towerTex.width = 64;
+  towerTex.height = 128;
+  const tg = towerTex.getContext("2d");
+  tg.fillStyle = "#243040";
+  tg.fillRect(0, 0, 64, 128);
+  for (let y = 6; y < 122; y += 10) {
+    for (let x = 5; x < 60; x += 9) {
+      const litWindow = ((x * 3 + y * 5) % 13) > 5;
+      tg.fillStyle = litWindow ? "#f6e2b0" : "#10151c";
+      tg.fillRect(x, y, 4, 6);
+    }
+  }
+  const towerMap = new THREE.CanvasTexture(towerTex);
+  towerMap.colorSpace = THREE.SRGBColorSpace;
+  towerMap.wrapS = THREE.RepeatWrapping;
+  towerMap.wrapT = THREE.RepeatWrapping;
+  const towerMat = new THREE.MeshLambertMaterial({
+    color: 0xb7c0cc,
+    map: towerMap,
+    emissive: 0xffe6bf,
+    emissiveMap: towerMap,
+    emissiveIntensity: 0.16,
+  });
+  const towerCount = 42;
+  const towers = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), towerMat, towerCount);
+  towers.raycast = function () {};
+  const towerDummy = new THREE.Object3D();
+  let seed = 19;
+  function rnd() {
+    seed = (seed * 16807) % 2147483647;
+    return (seed % 1000) / 1000;
+  }
+  for (let i = 0; i < towerCount; i += 1) {
+    const side = i % 4;
+    const along = -28 + rnd() * 56;
+    let x = 0;
+    let z = 0;
+    if (side === 0) { x = -22 - rnd() * 18; z = along * 0.6; }
+    else if (side === 1) { x = 22 + rnd() * 18; z = along * 0.6; }
+    else if (side === 2) { x = along; z = -26 - rnd() * 16; }
+    else { x = (rnd() < 0.5 ? -1 : 1) * (22 + rnd() * 16); z = 22 + rnd() * 8; }
+    const h = 8 + rnd() * 22;
+    towerDummy.position.set(x, h / 2 - 1, z);
+    towerDummy.scale.set(2.2 + rnd() * 3.5, h, 2.2 + rnd() * 3.5);
+    towerDummy.rotation.set(0, 0, 0);
+    towerDummy.updateMatrix();
+    towers.setMatrixAt(i, towerDummy.matrix);
+  }
+  towers.instanceMatrix.needsUpdate = true;
+  scene.add(towers);
+
+  const exterior = document.createElement("canvas");
+  exterior.width = 512;
+  exterior.height = 128;
+  const eg = exterior.getContext("2d");
+  eg.fillStyle = BRAND.colors.ink;
+  eg.fillRect(0, 0, 512, 128);
+  drawLogo(eg, 16, 16, 96);
+  eg.fillStyle = BRAND.colors.cream;
+  eg.font = "700 42px sans-serif";
+  eg.fillText(BRAND.name, 130, 62);
+  eg.fillStyle = BRAND.colors.amber;
+  eg.font = "500 22px sans-serif";
+  eg.fillText("Floor " + BRAND.floor, 130, 98);
+  const exteriorTex = new THREE.CanvasTexture(exterior);
+  exteriorTex.colorSpace = THREE.SRGBColorSpace;
+  const exteriorSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.4, 0.85),
+    new THREE.MeshBasicMaterial({ map: exteriorTex })
+  );
+  exteriorSign.position.set(0.2, 3.15, LZ + 0.28);
+  exteriorSign.raycast = function () {};
+  scene.add(exteriorSign);
+
+  const floorCanvas = document.createElement("canvas");
+  floorCanvas.width = 128;
+  floorCanvas.height = 128;
+  const fg = floorCanvas.getContext("2d");
+  fg.fillStyle = BRAND.colors.ink;
+  fg.fillRect(0, 0, 128, 128);
+  fg.fillStyle = BRAND.colors.amber;
+  fg.font = "700 64px sans-serif";
+  fg.textAlign = "center";
+  fg.fillText(String(BRAND.floor), 64, 78);
+  fg.font = "600 16px sans-serif";
+  fg.fillStyle = BRAND.colors.cream;
+  fg.fillText("FLOOR", 64, 108);
+  const floorTex = new THREE.CanvasTexture(floorCanvas);
+  floorTex.colorSpace = THREE.SRGBColorSpace;
+  const floorSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.42, 0.42),
+    new THREE.MeshBasicMaterial({ map: floorTex })
+  );
+  floorSign.position.set(0.15, 1.55, LZ - 0.28);
+  floorSign.raycast = function () {};
+  scene.add(floorSign);
+
   function setQuality(level) {
     dashEvery = level === "low" ? 12 : 3;
+  }
+
+  function setNight(on) {
+    towerMat.emissiveIntensity = on ? 1.25 : 0.14;
+    towerMat.color.set(on ? 0x9aa6b8 : 0xd5dde6);
   }
 
   function update(time) {
@@ -1227,6 +1385,7 @@ export function buildOffice(scene, bots, options) {
     screens: screens,
     update: update,
     setQuality: setQuality,
+    setNight: setNight,
     botRadius: BOT_R,
   };
 }

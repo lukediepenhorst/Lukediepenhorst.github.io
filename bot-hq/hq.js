@@ -105,9 +105,9 @@ function startScene(botInfos) {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xa9cbe4);
-  scene.fog = new THREE.Fog(0xa9cbe4, 38, 86);
+  scene.fog = new THREE.Fog(0xa9cbe4, 42, 110);
 
-  const camera = new THREE.PerspectiveCamera(36, 1, 0.08, 120);
+  const camera = new THREE.PerspectiveCamera(36, 1, 0.08, 180);
   const labelRenderer = new CSS2DRenderer();
   labelRenderer.domElement.className = "labels";
   viewport.appendChild(labelRenderer.domElement);
@@ -123,7 +123,7 @@ function startScene(botInfos) {
   controls.zoomSpeed = 0.85;
   controls.panSpeed = 0.7;
   controls.minDistance = 3.2;
-  controls.maxDistance = 34;
+  controls.maxDistance = 48;
   controls.minPolarAngle = 0.08;
   controls.maxPolarAngle = Math.PI / 2 - 0.08;
   controls.mouseButtons = {
@@ -136,7 +136,8 @@ function startScene(botInfos) {
     TWO: THREE.TOUCH.DOLLY_PAN,
   };
 
-  scene.add(new THREE.HemisphereLight(0xfff6ea, 0xb89a78, 0.95));
+  const hemi = new THREE.HemisphereLight(0xfff6ea, 0xb89a78, 0.95);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff8f0, 1.35);
   sun.position.set(9, 16, 11);
   scene.add(sun);
@@ -249,6 +250,40 @@ function startScene(botInfos) {
   }
 
   document.getElementById("btn-reset").addEventListener("click", resetView);
+  const timeButton = document.getElementById("btn-time");
+  let night = false;
+  function applyTimeOfDay() {
+    if (night) {
+      scene.background.set(0x070b16);
+      scene.fog.color.set(0x070b16);
+      renderer.setClearColor(0x070b16, 1);
+      hemi.intensity = 0.28;
+      sun.intensity = 0.22;
+      warm.intensity = 11;
+      cool.intensity = 7;
+      renderer.toneMappingExposure = 0.92;
+    } else {
+      scene.background.set(0xa9cbe4);
+      scene.fog.color.set(0xa9cbe4);
+      renderer.setClearColor(0xa9cbe4, 1);
+      hemi.intensity = 0.95;
+      sun.intensity = 1.35;
+      warm.intensity = 7;
+      cool.intensity = 4;
+      renderer.toneMappingExposure = 1.05;
+    }
+    office.setNight(night);
+    if (timeButton) {
+      timeButton.textContent = night ? "Day" : "Night";
+      timeButton.setAttribute("aria-pressed", night ? "true" : "false");
+    }
+  }
+  if (timeButton) {
+    timeButton.addEventListener("click", () => {
+      night = !night;
+      applyTimeOfDay();
+    });
+  }
   followButtons.forEach((button) => {
     if (!button) return;
     button.addEventListener("click", () => {
@@ -299,6 +334,7 @@ function startScene(botInfos) {
 
   renderer.domElement.addEventListener("pointerdown", (event) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (intro) endIntro();
     down = { x: event.clientX, y: event.clientY, id: event.pointerId, type: event.pointerType };
   });
   window.addEventListener("pointerup", (event) => {
@@ -375,6 +411,30 @@ function startScene(botInfos) {
   const observer = new ResizeObserver(() => resize());
   observer.observe(viewport);
   resize();
+
+  // A short move from outside the tower into the floor. Tap skips it.
+  // Slow devices that have already dropped quality never play it.
+  let intro = null;
+  const introSkip = document.getElementById("intro-skip");
+  if (!reduce && !debug) {
+    const home = homeView();
+    intro = {
+      t: 0,
+      fromPos: new THREE.Vector3(2, 5.5, 22),
+      toPos: new THREE.Vector3(home.pos[0], home.pos[1], home.pos[2]),
+      fromTgt: new THREE.Vector3(0, 1.6, 4),
+      toTgt: new THREE.Vector3(home.target[0], home.target[1], home.target[2]),
+    };
+    camera.position.copy(intro.fromPos);
+    controls.target.copy(intro.fromTgt);
+    if (introSkip) introSkip.hidden = false;
+  }
+  function endIntro() {
+    if (!intro) return;
+    intro = null;
+    frameHome();
+    if (introSkip) introSkip.hidden = true;
+  }
 
   function clampTarget() {
     const target = controls.target;
@@ -453,7 +513,7 @@ function startScene(botInfos) {
     const t = clock.elapsedTime;
     // Drop pixel ratio if the frame time stays over ~40ms. The first second is ignored
     // so a slow startup does not immediately switch the whole office to low quality.
-    if (t > 1.2) {
+    if (t > 1.2 && raw < 0.5) {
       if (raw > 0.04) {
         slowTime += raw;
         smoothTime = 0;
@@ -464,6 +524,7 @@ function startScene(botInfos) {
       if (quality === "high" && slowTime > 1.6) {
         quality = "low";
         office.setQuality("low");
+        if (intro) endIntro();
         resize();
       } else if (quality === "low" && smoothTime > 2.5) {
         quality = "high";
@@ -475,7 +536,13 @@ function startScene(botInfos) {
     office.update(t);
     crew.update(dt, t);
 
-    if (tween) {
+    if (intro) {
+      intro.t += Math.min(raw, 0.05);
+      const k = smoothstep(Math.min(1, intro.t / 2.4));
+      camera.position.lerpVectors(intro.fromPos, intro.toPos, k);
+      controls.target.lerpVectors(intro.fromTgt, intro.toTgt, k);
+      if (intro.t >= 2.4) endIntro();
+    } else if (tween) {
       tween.t += raw / 0.7;
       const k = smoothstep(Math.min(1, tween.t));
       camera.position.lerpVectors(tween.fromPos, tween.toPos, k);
@@ -515,7 +582,7 @@ function startScene(botInfos) {
       }
     }
 
-    if (!tween) controls.update();
+    if (!tween && !intro) controls.update();
     clampTarget();
 
     const selected = window.BotHQ ? window.BotHQ.selectedId : null;
@@ -601,6 +668,9 @@ function startScene(botInfos) {
     },
     isFollowing: function () {
       return followId;
+    },
+    isIntro: function () {
+      return !!intro;
     },
     camera: function () {
       return {
