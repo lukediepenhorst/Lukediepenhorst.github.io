@@ -232,7 +232,47 @@ export function createCrew(scene, office, bots, options) {
     mail: new THREE.SpriteMaterial({ map: bubbleTexture("✉", BRAND.colors.amber), transparent: true, depthWrite: false }),
     five: new THREE.SpriteMaterial({ map: bubbleTexture("yo", BRAND.colors.amber), transparent: true, depthWrite: false }),
     yes: new THREE.SpriteMaterial({ map: bubbleTexture("yes", "#3ddc8a"), transparent: true, depthWrite: false }),
+    cheer: new THREE.SpriteMaterial({ map: bubbleTexture("Woo!", "#ffb15a"), transparent: true, depthWrite: false }),
   };
+  const PHRASES = [
+    "Hey boss!",
+    "Great call, boss",
+    "Thanks for the direction, Luke",
+    "On it, Luke!",
+    "Morning, CEO!",
+  ];
+  function phraseTexture(text) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "rgba(247, 241, 232, 0.96)";
+    ctx.fillRect(8, 16, 496, 96);
+    ctx.fillStyle = "#1c1612";
+    ctx.font = "700 42px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, 256, 64);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+  const phraseMats = PHRASES.map((text) => new THREE.SpriteMaterial({
+    map: phraseTexture(text),
+    transparent: true,
+    depthWrite: false,
+  }));
+  const phraseSprites = [0, 1].map(() => {
+    const sprite = new THREE.Sprite(phraseMats[0]);
+    sprite.visible = false;
+    sprite.scale.set(1.5, 0.38, 1);
+    sprite.raycast = function () {};
+    scene.add(sprite);
+    return sprite;
+  });
+  let lastPhrase = "";
+  let groupVisible = true;
+  let cheering = false;
   const ball = new THREE.Mesh(
     new THREE.SphereGeometry(0.055, 8, 6),
     new THREE.MeshBasicMaterial({ color: 0xf7f3ea })
@@ -486,6 +526,10 @@ export function createCrew(scene, office, bots, options) {
       laneNow: 0,
       hi: 0,
       hiCool: 0,
+      wave: 0,
+      greetYaw: 0,
+      greetCool: 0,
+      phrase: "",
     };
     crew.push(bot);
   });
@@ -829,6 +873,10 @@ export function createCrew(scene, office, bots, options) {
   crew.forEach(scriptStart);
 
   function stepWalk(bot, dt) {
+    if (bot.wave > 0) {
+      bot.group.rotation.y = turnToward(bot.group.rotation.y, bot.greetYaw, dt);
+      return;
+    }
     const target = bot.path[0];
     if (!target) {
       arrive(bot);
@@ -863,7 +911,8 @@ export function createCrew(scene, office, bots, options) {
 
   function applyPose(bot, t, dt) {
     const pose = bot.mode === "act" && bot.action ? bot.action.pose : "";
-    const sitTarget = pose === "sit" || pose === "lounge" ? 1 : 0;
+    let sitTarget = pose === "sit" || pose === "lounge" ? 1 : 0;
+    if (bot.wave > 0) sitTarget = 0;
     const reachTarget = pose === "reach" || pose === "sip" ? 1 : 0;
     const gaitTarget = bot.mode === "walk" ? 1 : 0;
     const blend = Math.min(1, dt * 6);
@@ -951,6 +1000,14 @@ export function createCrew(scene, office, bots, options) {
       elR = -0.15;
       bot.hi = Math.max(0, bot.hi - dt);
       if (!bot.carrying) bot.emote = "five";
+    }
+    if (bot.wave > 0) {
+      shR = -2.2;
+      elR = -0.2;
+      shL = -0.4;
+      bot.wave = Math.max(0, bot.wave - dt);
+      if (bot.wave <= 0) bot.phrase = "";
+      bot.group.rotation.y = turnToward(bot.group.rotation.y, bot.greetYaw, dt);
     }
     bot.shoulderL.rotation.x = shL;
     bot.shoulderR.rotation.x = shR;
@@ -1048,7 +1105,9 @@ export function createCrew(scene, office, bots, options) {
       ball.position.set(2.35, 0.86, 5.55);
     }
     let bubble = 0;
+    let phraseSlot = 0;
     bubbles.forEach((sprite) => { sprite.visible = false; });
+    phraseSprites.forEach((sprite) => { sprite.visible = false; });
     for (let i = 0; i < crew.length; i += 1) {
       const bot = crew[i];
       if (bot.mode === "walk") stepWalk(bot, dt);
@@ -1059,11 +1118,19 @@ export function createCrew(scene, office, bots, options) {
       shadowDummy.scale.set(0.7, 0.55, 1);
       shadowDummy.updateMatrix();
       shadowMesh.setMatrixAt(i, shadowDummy.matrix);
-      if (bot.emote && emoteMats[bot.emote] && bubble < bubbles.length && !reduce) {
+      if (bot.phrase && phraseSlot < phraseSprites.length) {
+        const sprite = phraseSprites[phraseSlot];
+        const mat = phraseMats[PHRASES.indexOf(bot.phrase)];
+        sprite.material = mat || phraseMats[0];
+        sprite.position.set(bot.group.position.x, 1.9, bot.group.position.z);
+        sprite.visible = groupVisible;
+        lastPhrase = bot.phrase;
+        phraseSlot += 1;
+      } else if (bot.emote && emoteMats[bot.emote] && bubble < bubbles.length && !reduce) {
         const sprite = bubbles[bubble];
         sprite.material = emoteMats[bot.emote];
         sprite.position.set(bot.group.position.x + 0.22, 1.72, bot.group.position.z);
-        sprite.visible = true;
+        sprite.visible = groupVisible;
         bubble += 1;
       }
     }
@@ -1072,6 +1139,53 @@ export function createCrew(scene, office, bots, options) {
     sync(shins);
     sync(uppers);
     sync(fores);
+  }
+
+  const BOARD = { x0: 1.2, z0: -7.8, x1: 9.6, z1: -2.6 };
+
+  function setVisible(on) {
+    groupVisible = on;
+    crew.forEach((bot) => { bot.group.visible = on; });
+    ball.visible = on;
+    shadowMesh.visible = on;
+    if (!on) {
+      bubbles.forEach((sprite) => { sprite.visible = false; });
+      phraseSprites.forEach((sprite) => { sprite.visible = false; });
+    }
+  }
+
+  function greet(x, z, time) {
+    if (!groupVisible) return { phrase: "", cheer: false };
+    let phrase = "";
+    let cheer = false;
+    const inside = x > BOARD.x0 && x < BOARD.x1 && z > BOARD.z0 && z < BOARD.z1;
+    if (inside && !cheering) {
+      cheering = true;
+      cheer = true;
+      crew.forEach((bot) => {
+        const inRoom = bot.x > BOARD.x0 && bot.x < BOARD.x1 && bot.z > BOARD.z0 && bot.z < BOARD.z1;
+        if (!inRoom) return;
+        bot.wave = 1.8;
+        bot.greetYaw = Math.atan2(x - bot.x, z - bot.z);
+        bot.phrase = "";
+        bot.emote = "cheer";
+      });
+      lastPhrase = "Woo!";
+    }
+    if (!inside) cheering = false;
+    crew.forEach((bot, i) => {
+      const dist = Math.hypot(bot.x - x, bot.z - z);
+      if (dist < 2.5 && time > bot.greetCool) {
+        bot.greetCool = time + 9;
+        bot.wave = 1.5;
+        bot.greetYaw = Math.atan2(x - bot.x, z - bot.z);
+        bot.phrase = PHRASES[i % PHRASES.length];
+        bot.emote = "";
+        phrase = bot.phrase;
+        lastPhrase = phrase;
+      }
+    });
+    return { phrase: phrase, cheer: cheer };
   }
 
   function get(id) {
@@ -1097,5 +1211,13 @@ export function createCrew(scene, office, bots, options) {
   // Pose once so the first painted frame is not a T-pose.
   update(0.016, 0.016);
 
-  return { bots: crew, update: update, get: get, snapshot: snapshot };
+  return {
+    bots: crew,
+    update: update,
+    get: get,
+    snapshot: snapshot,
+    setVisible: setVisible,
+    greet: greet,
+    lastPhrase: function () { return lastPhrase; },
+  };
 }
