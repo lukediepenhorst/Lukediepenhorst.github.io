@@ -67,6 +67,7 @@
 
   var bots = [];
   var selectedId = null;
+  var openedAt = 0;
 
   function syncPressed() {
     var buttons = document.querySelectorAll(".roster-item");
@@ -92,6 +93,7 @@
     panelStatus.className = "badge " + statusClass(bot.status);
     panelSwatch.style.background = bot.accent;
     syncPressed();
+    openedAt = Date.now();
     var current = document.querySelector('.roster-item[data-id="' + window.CSS.escape(id) + '"]');
     if (current && current.scrollIntoView) current.scrollIntoView({ block: "nearest" });
     document.dispatchEvent(new CustomEvent("bothq:select", { detail: { id: id } }));
@@ -111,7 +113,12 @@
   }
 
   panelClose.addEventListener("click", close);
-  scrim.addEventListener("click", close);
+  // The tap that opens the panel can also land on the scrim a moment later.
+  // Ignore that click so the details stay open on a phone.
+  scrim.addEventListener("click", function () {
+    if (Date.now() - openedAt < 450) return;
+    close();
+  });
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape") close();
   });
