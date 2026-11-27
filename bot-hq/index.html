@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#07090f">
+  <meta name="theme-color" content="#1c1612">
   <title>Luke's Bot HQ</title>
-  <meta name="description" content="A low-poly 3D office where Luke's bots sit at their desks. Statuses are sample data, edited by hand.">
+  <meta name="description" content="A low-poly 3D office where Luke's bots walk between desks, carry folders, and take breaks. Statuses are sample data, edited by hand.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,6 +14,12 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="hq.css">
   <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" crossorigin>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js" crossorigin>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/renderers/CSS2DRenderer.js" crossorigin>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/utils/BufferGeometryUtils.js" crossorigin>
+  <link rel="modulepreload" href="hq.js">
+  <link rel="modulepreload" href="office.js">
+  <link rel="modulepreload" href="actors.js">
   <script type="importmap">
   {
     "imports": {
@@ -24,40 +30,52 @@
   </script>
 </head>
 <body>
+  <!--
+    Static page: no build step. roster.js loads status.json and the side panel.
+    hq.js starts the 3D office (see office.js and actors.js).
+  -->
   <a class="skip-link" href="#roster">Skip to roster</a>
+  <div id="viewport" class="viewport" role="img" aria-label="Stylized 3D office. Nine bots walk between desks, a meeting room, a break room, and a records room. Tap a bot or open the roster for details."></div>
   <header class="topbar">
+    <a class="home-link" href="../">Projects</a>
     <div class="titles">
-      <a class="home-link" href="../">All projects</a>
       <h1>Luke's Bot HQ</h1>
-      <p class="eyebrow" id="floor-count">Nine desks</p>
+      <p class="sub"><span id="floor-count">Nine bots</span><span id="updated"></span></p>
     </div>
-    <p class="manual-note">Statuses are updated manually for now.<span id="updated"></span></p>
+    <div class="controls">
+      <button type="button" id="btn-reset">Reset view</button>
+      <button type="button" id="btn-follow" hidden aria-pressed="false">Stop following</button>
+      <button type="button" id="btn-labels" aria-pressed="true">Names</button>
+      <button type="button" id="btn-roster" aria-expanded="false" aria-controls="roster">Roster</button>
+    </div>
   </header>
-  <main class="layout">
-    <section class="stage" id="stage" aria-label="3D office">
-      <div id="viewport" class="viewport" role="img" aria-label="Stylized 3D office. Nine bots sit at desks. Choose one in the roster, or select a figure in the scene."></div>
-      <div id="loading" class="loading">Bringing the floor online…</div>
-      <div id="fallback" class="fallback" hidden>
-        <p id="fallback-text"></p>
-      </div>
-      <p id="hint" class="hint">Drag to look around. Pinch or scroll to zoom.</p>
-    </section>
-    <aside class="roster" id="roster" aria-labelledby="roster-title">
-      <div class="roster-head">
-        <h2 id="roster-title">Roster</h2>
-        <p>Same bots as the floor. Select one for details.</p>
-      </div>
-      <ul id="roster-list">
-        <li class="roster-pending">Loading roster…</li>
-      </ul>
-      <p class="roster-foot">Hand-edit <code>status.json</code>, then refresh.</p>
-    </aside>
-  </main>
+  <p id="hint" class="hint">Drag to look · pinch or scroll to zoom · tap a bot</p>
+  <div id="loading" class="loading" role="status">
+    <div class="spinner" aria-hidden="true"></div>
+    <p>Opening the office…</p>
+  </div>
+  <div id="fallback" class="fallback" hidden>
+    <p id="fallback-text"></p>
+  </div>
+  <aside class="roster" id="roster" aria-labelledby="roster-title">
+    <div class="roster-head">
+      <h2 id="roster-title">Roster</h2>
+      <button type="button" id="roster-close" class="close">Close</button>
+    </div>
+    <p class="roster-note">Same bots as the floor. Select one for details.</p>
+    <ul id="roster-list">
+      <li class="roster-pending">Loading roster…</li>
+    </ul>
+    <p class="roster-foot">Hand-edit <code>status.json</code>, then refresh. Statuses are sample data.</p>
+  </aside>
   <button id="scrim" class="scrim" type="button" hidden aria-label="Close details"></button>
   <aside id="panel" class="panel" role="dialog" aria-modal="true" aria-labelledby="panel-name" hidden>
     <div class="panel-top">
       <p class="eyebrow">Bot</p>
-      <button type="button" id="panel-close" class="close">Close</button>
+      <div class="panel-top-actions">
+        <button type="button" id="panel-follow" class="close" hidden aria-pressed="false">Stop following</button>
+        <button type="button" id="panel-close" class="close">Close</button>
+      </div>
     </div>
     <span class="panel-swatch" id="panel-swatch" aria-hidden="true"></span>
     <h2 id="panel-name"></h2>
@@ -70,9 +88,19 @@
     <p id="panel-focus" class="panel-focus"></p>
   </aside>
   <noscript>
-    <p class="noscript">JavaScript is off, so the floor and roster can't load. The bots are Chief of Staff, Inbox Manager, Texts, Business Lab, Personal Shopper, Content Coach, Opportunity Scout, Money Manager, and Goal Tracker.</p>
+    <p class="noscript">JavaScript is off, so the office can't load. The bots are Chief of Staff, Inbox Manager, Texts, Business Lab, Personal Shopper, Content Coach, Opportunity Scout, Money Manager, and Goal Tracker.</p>
   </noscript>
   <script src="roster.js"></script>
-  <script type="module" src="hq.js"></script>
+  <script type="module">
+    import("./hq.js").catch(function () {
+      var loading = document.getElementById("loading");
+      var fallback = document.getElementById("fallback");
+      var text = document.getElementById("fallback-text");
+      if (text) text.textContent = "The 3D office files didn't load. Check your connection, then refresh. The roster still lists every bot.";
+      if (fallback) fallback.hidden = false;
+      if (loading) loading.hidden = true;
+      window.__HQ_SETTLED__ = true;
+    });
+  </script>
 </body>
 </html>

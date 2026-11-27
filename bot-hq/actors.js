@@ -1,0 +1,803 @@
+import * as THREE from "three";
+import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+
+/*
+  The nine bots: a simple skeleton, a walk/sit/type pose, and a to-do list.
+
+  Each bot's to-do list is a queue of stops: "walk to the cabinet, pick up a
+  folder, carry it to another desk, then sit and type." Walking uses the
+  hallway graph from office.js, so they go through doors instead of walls.
+
+  Limbs are InstancedMesh (one draw call for every thigh, and so on). We still
+  pose a normal parent/child skeleton, then copy those bone positions onto the
+  instances each frame. That keeps the code easy to read and the phone happy.
+*/
+
+const THIGH = 0.32;
+const SHIN = 0.3;
+const UPPER = 0.26;
+const FORE = 0.24;
+const HIP_Y = THIGH + SHIN;
+
+// Face looks along local +Z. Negative hip X swings a foot toward +Z (forward).
+// If a walk cycle ever looks backwards, flip the sign of SWING.
+const SWING = 0.62;
+const SIT = {
+  hip: -1.25,
+  knee: 1.35,
+  shoulder: -0.95,
+  elbow: -1.05,
+  drop: 0.2,
+};
+
+const PAPER = new THREE.Color("#e7cb8c");
+
+function turnToward(current, target, dt) {
+  let delta = target - current;
+  while (delta > Math.PI) delta -= Math.PI * 2;
+  while (delta < -Math.PI) delta += Math.PI * 2;
+  const k = 1 - Math.exp(-10 * dt);
+  return current + delta * k;
+}
+
+function iconTexture(text, color) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "rgba(24, 18, 14, 0.9)";
+  ctx.beginPath();
+  ctx.arc(64, 64, 56, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.font = "700 72px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 64, 70);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function eyeTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#f5fbff";
+  ctx.fillRect(0, 0, 128, 64);
+  ctx.fillStyle = "#1c2430";
+  ctx.beginPath();
+  ctx.arc(40, 34, 11, 0, Math.PI * 2);
+  ctx.arc(88, 34, 11, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(36, 28, 5, 5);
+  ctx.fillRect(84, 28, 5, 5);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function shadowTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  const g = ctx.createRadialGradient(32, 32, 4, 32, 32, 32);
+  g.addColorStop(0, "rgba(40, 24, 16, 0.5)");
+  g.addColorStop(1, "rgba(40, 24, 16, 0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  return tex;
+}
+
+function rand(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function pick(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+/**
+ * @param {THREE.Scene} scene
+ * @param {ReturnType<import("./office.js").buildOffice>} office
+ * @param {Array} bots
+ * @param {{reduceMotion?: boolean}} [options]
+ */
+export function createCrew(scene, office, bots, options) {
+  const reduce = !!(options && options.reduceMotion);
+  const count = bots.length;
+
+  const limbMat = new THREE.MeshLambertMaterial({ color: 0x2a3038, flatShading: true });
+  const paperMat = new THREE.MeshLambertMaterial({ color: PAPER, flatShading: true });
+  const coinMat = new THREE.MeshLambertMaterial({
+    color: 0xf0d48a,
+    emissive: 0xf0d48a,
+    emissiveIntensity: 0.25,
+    flatShading: true,
+  });
+  const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfff3cc });
+  const eyeMat = new THREE.MeshBasicMaterial({ map: eyeTexture() });
+  const pickMat = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    colorWrite: false,
+  });
+
+  const geos = {
+    torso: new THREE.BoxGeometry(0.36, 0.4, 0.22),
+    head: new THREE.BoxGeometry(0.32, 0.3, 0.3),
+    eye: new THREE.PlaneGeometry(0.22, 0.09),
+    thigh: new THREE.BoxGeometry(0.11, THIGH, 0.11),
+    shin: new THREE.BoxGeometry(0.1, SHIN, 0.1),
+    upper: new THREE.BoxGeometry(0.09, UPPER, 0.09),
+    fore: new THREE.BoxGeometry(0.08, FORE, 0.08),
+    folder: new THREE.BoxGeometry(0.2, 0.035, 0.26),
+    tab: new THREE.BoxGeometry(0.1, 0.028, 0.07),
+    pick: new THREE.BoxGeometry(0.7, 1.7, 0.7),
+  };
+
+  function makeBucket(geometry) {
+    const mesh = new THREE.InstancedMesh(geometry, limbMat, count * 2);
+    // The mesh sits at the origin; the copies are on the bots. Culling the
+    // origin would hide every leg as soon as you pan away from the middle.
+    mesh.frustumCulled = false;
+    mesh.raycast = function () {};
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(mesh);
+    return { mesh: mesh, anchors: [] };
+  }
+
+  const thighs = makeBucket(geos.thigh);
+  const shins = makeBucket(geos.shin);
+  const uppers = makeBucket(geos.upper);
+  const fores = makeBucket(geos.fore);
+
+  const questionMat = new THREE.SpriteMaterial({
+    map: iconTexture("?", "#ffd592"),
+    transparent: true,
+    depthWrite: false,
+  });
+  const checkMat = new THREE.SpriteMaterial({
+    map: iconTexture("✓", "#d9ffe8"),
+    transparent: true,
+    depthWrite: false,
+  });
+
+  const shadowMesh = new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({
+      map: shadowTexture(),
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+    count
+  );
+  shadowMesh.frustumCulled = false;
+  shadowMesh.raycast = function () {};
+  shadowMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  scene.add(shadowMesh);
+  const shadowDummy = new THREE.Object3D();
+
+  const crew = [];
+
+  function addBone(parent, x, y, z, length, bucket) {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, y, z);
+    parent.add(pivot);
+    const anchor = new THREE.Object3D();
+    anchor.position.y = -length / 2;
+    pivot.add(anchor);
+    bucket.anchors.push(anchor);
+    return pivot;
+  }
+
+  function addAccessory(mark, head, torso, mat) {
+    if (mark === "antenna") {
+      const pole = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.16, 0.03), mat);
+      pole.position.y = 0.22;
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.07), mat);
+      tip.position.y = 0.32;
+      head.add(pole, tip);
+    } else if (mark === "mail") {
+      const mail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.11, 0.025), paperMat);
+      mail.position.set(0, 0.04, 0.13);
+      torso.add(mail);
+    } else if (mark === "nubs") {
+      [-0.12, 0.12].forEach((x) => {
+        const nub = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, 0.06), mat);
+        nub.position.set(x, 0.18, 0);
+        head.add(nub);
+      });
+    } else if (mark === "lamp") {
+      const stalk = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.03), limbMat);
+      stalk.position.y = 0.2;
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), bulbMat);
+      bulb.position.y = 0.28;
+      head.add(stalk, bulb);
+    } else if (mark === "bag") {
+      const bag = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.08), mat);
+      bag.position.set(-0.24, -0.04, 0.02);
+      torso.add(bag);
+    } else if (mark === "headset") {
+      const band = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.045, 0.18), limbMat);
+      band.position.y = 0.16;
+      head.add(band);
+      [-0.14, 0.14].forEach((x) => {
+        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, 0.05), mat);
+        pad.position.set(x, 0.08, 0.02);
+        head.add(pad);
+      });
+    } else if (mark === "radar") {
+      const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.03, 8), mat);
+      dish.position.y = 0.2;
+      head.add(dish);
+    } else if (mark === "coin") {
+      const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.025, 10), coinMat);
+      coin.rotation.x = Math.PI / 2;
+      coin.position.set(0.02, 0.02, 0.13);
+      torso.add(coin);
+    } else if (mark === "fin") {
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.16, 0.12), mat);
+      fin.position.set(0, 0.2, -0.04);
+      head.add(fin);
+    }
+  }
+
+  bots.forEach((info, index) => {
+    const desk = office.desks[info.id];
+    const mat = new THREE.MeshLambertMaterial({
+      color: info.accent,
+      emissive: info.accent,
+      emissiveIntensity: 0.12,
+      flatShading: true,
+    });
+
+    const group = new THREE.Group();
+    group.name = info.id;
+    const pelvis = new THREE.Group();
+    group.add(pelvis);
+
+    const torso = new THREE.Mesh(geos.torso, mat);
+    torso.position.y = HIP_Y + 0.22;
+    pelvis.add(torso);
+
+    const head = new THREE.Group();
+    head.position.y = HIP_Y + 0.56;
+    const headMesh = new THREE.Mesh(geos.head, mat);
+    const eyes = new THREE.Mesh(geos.eye, eyeMat);
+    eyes.position.set(0, 0.02, 0.16);
+    head.add(headMesh, eyes);
+    pelvis.add(head);
+    addAccessory(desk ? desk.mark : "antenna", head, torso, mat);
+
+    const hipL = addBone(pelvis, -0.1, HIP_Y, 0, THIGH, thighs);
+    const kneeL = addBone(hipL, 0, -THIGH, 0, SHIN, shins);
+    const hipR = addBone(pelvis, 0.1, HIP_Y, 0, THIGH, thighs);
+    const kneeR = addBone(hipR, 0, -THIGH, 0, SHIN, shins);
+    const shoulderL = addBone(pelvis, -0.24, HIP_Y + 0.36, 0, UPPER, uppers);
+    const elbowL = addBone(shoulderL, 0, -UPPER, 0, FORE, fores);
+    const shoulderR = addBone(pelvis, 0.24, HIP_Y + 0.36, 0, UPPER, uppers);
+    const elbowR = addBone(shoulderR, 0, -UPPER, 0, FORE, fores);
+    shoulderL.rotation.z = 0.22;
+    shoulderR.rotation.z = -0.22;
+
+    const hand = new THREE.Group();
+    hand.position.y = -FORE;
+    elbowR.add(hand);
+    const folder = new THREE.Group();
+    const folderBody = new THREE.Mesh(geos.folder, paperMat);
+    const folderTab = new THREE.Mesh(geos.tab, mat);
+    folderTab.position.set(0, 0.03, -0.09);
+    folder.add(folderBody, folderTab);
+    folder.position.set(0, 0, 0.08);
+    folder.rotation.x = -0.5;
+    folder.visible = false;
+    hand.add(folder);
+
+    // Invisible tap target. Layer 1 is not drawn (the camera only shows layer 0)
+    // but the click test looks at layer 1, which makes phone taps forgiving.
+    const pick = new THREE.Mesh(geos.pick, pickMat);
+    pick.position.y = 0.9;
+    pick.layers.set(1);
+    pick.userData.botId = info.id;
+    group.add(pick);
+
+    let badge = null;
+    if (info.status === "Waiting on Luke") {
+      badge = new THREE.Sprite(questionMat);
+      badge.position.set(0.28, 1.45, 0);
+      badge.scale.setScalar(0.34);
+      group.add(badge);
+    } else if (info.status === "Done") {
+      badge = new THREE.Sprite(checkMat);
+      badge.position.set(0.28, 1.45, 0);
+      badge.scale.setScalar(0.32);
+      group.add(badge);
+    }
+
+    const wrap = document.createElement("div");
+    wrap.className = "bot-label-wrap";
+    const labelEl = document.createElement("button");
+    labelEl.type = "button";
+    labelEl.className = "bot-label";
+    const nameEl = document.createElement("span");
+    nameEl.className = "bot-label-name";
+    nameEl.textContent = info.name;
+    const badgeEl = document.createElement("span");
+    badgeEl.className = "badge " + (window.BotStatus ? window.BotStatus.statusClass(info.status) : "");
+    badgeEl.textContent = info.status;
+    labelEl.append(nameEl, badgeEl);
+    labelEl.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (window.BotHQ) window.BotHQ.select(info.id);
+    });
+    wrap.append(labelEl);
+    const labelObj = new CSS2DObject(wrap);
+    labelObj.position.set(0, 1.68, 0);
+    labelObj.center.set(0.5, 1);
+    group.add(labelObj);
+
+    scene.add(group);
+
+    const seatId = desk ? desk.seat : "ln-seat";
+    const frontId = desk ? desk.front : "ln-seat";
+    const bot = {
+      id: info.id,
+      name: info.name,
+      status: info.status,
+      accent: info.accent,
+      index: index,
+      group: group,
+      pelvis: pelvis,
+      head: head,
+      hipL: hipL,
+      hipR: hipR,
+      kneeL: kneeL,
+      kneeR: kneeR,
+      shoulderL: shoulderL,
+      shoulderR: shoulderR,
+      elbowL: elbowL,
+      elbowR: elbowR,
+      folder: folder,
+      folderNow: 0,
+      badge: badge,
+      labelEl: labelEl,
+      seatId: seatId,
+      frontId: frontId,
+      nodeId: seatId,
+      x: 0,
+      z: 0,
+      path: [],
+      queue: [],
+      mode: "act",
+      action: null,
+      timer: 1,
+      face: Math.PI,
+      carrying: false,
+      sit: 0,
+      reach: 0,
+      gait: 0,
+      phase: index * 0.8,
+      phase0: index * 1.3,
+      speed: 1.55 + (index % 4) * 0.1,
+      lane: (index % 3 - 1) * 0.12,
+      laneNow: 0,
+    };
+    crew.push(bot);
+  });
+
+  function pathPoints(ids) {
+    const out = [];
+    for (let i = 0; i < ids.length; i += 1) {
+      const n = office.nodes[ids[i]];
+      if (n) out.push({ id: ids[i], x: n.x, z: n.z });
+    }
+    return out;
+  }
+
+  function placeAlong(bot, ids, fraction) {
+    if (!ids || ids.length < 2) return false;
+    const pts = pathPoints(ids);
+    let total = 0;
+    const lens = [];
+    for (let i = 0; i < pts.length - 1; i += 1) {
+      const len = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].z - pts[i].z);
+      lens.push(len);
+      total += len;
+    }
+    let remain = total * Math.min(0.9, Math.max(0.12, fraction));
+    for (let i = 0; i < lens.length; i += 1) {
+      if (remain <= lens[i] || i === lens.length - 1) {
+        const u = lens[i] === 0 ? 0 : Math.min(1, remain / lens[i]);
+        bot.x = pts[i].x + (pts[i + 1].x - pts[i].x) * u;
+        bot.z = pts[i].z + (pts[i + 1].z - pts[i].z) * u;
+        bot.nodeId = pts[i].id;
+        bot.path = pts.slice(i + 1);
+        bot.mode = "walk";
+        return bot.path.length > 0;
+      }
+      remain -= lens[i];
+    }
+    return false;
+  }
+
+  function faceTravel(bot) {
+    const target = bot.path[0];
+    if (!target) return;
+    bot.group.rotation.y = Math.atan2(target.x - bot.x, target.z - bot.z);
+  }
+
+  function standAt(bot, nodeId, pose, seconds) {
+    const n = office.nodes[nodeId];
+    bot.x = n.x;
+    bot.z = n.z;
+    bot.nodeId = nodeId;
+    bot.path = [];
+    bot.mode = "act";
+    bot.action = { node: nodeId, pose: pose, seconds: seconds };
+    bot.timer = seconds;
+    bot.face = n.face !== undefined ? n.face : Math.PI;
+    bot.group.rotation.y = bot.face;
+    bot.sit = pose === "sit" ? 1 : 0;
+    bot.gait = 0;
+  }
+
+  function beginWalk(bot, nodeId) {
+    if (bot.nodeId === nodeId) return false;
+    const ids = office.findPath(bot.nodeId, nodeId);
+    if (!ids || ids.length < 2) {
+      const n = office.nodes[nodeId];
+      if (n) {
+        bot.nodeId = nodeId;
+        bot.x = n.x;
+        bot.z = n.z;
+      }
+      return false;
+    }
+    bot.path = pathPoints(ids).slice(1);
+    bot.mode = "walk";
+    return true;
+  }
+
+  function beginAct(bot) {
+    const item = bot.queue[0];
+    if (!item) {
+      fillQueue(bot);
+    }
+    const next = bot.queue[0];
+    bot.mode = "act";
+    bot.action = next;
+    bot.timer = next.seconds;
+    if (next.carry === "start") bot.carrying = true;
+    const n = office.nodes[next.node];
+    bot.face = n && n.face !== undefined ? n.face : bot.group.rotation.y;
+  }
+
+  function startNext(bot) {
+    if (reduce) {
+      standAt(bot, bot.seatId, "sit", 999);
+      bot.queue = [{ node: bot.seatId, pose: "sit", seconds: 999 }];
+      bot.action = bot.queue[0];
+      return;
+    }
+    if (!bot.queue.length) fillQueue(bot);
+    const walking = beginWalk(bot, bot.queue[0].node);
+    if (!walking) beginAct(bot);
+  }
+
+  function finishAct(bot) {
+    const item = bot.queue.shift();
+    if (item && item.carry === "end") bot.carrying = false;
+    startNext(bot);
+  }
+
+  function arrive(bot) {
+    const item = bot.queue[0];
+    if (item && item.node === bot.nodeId) beginAct(bot);
+    else startNext(bot);
+  }
+
+  function fillQueue(bot) {
+    // Odds for the next chore. Change these if you want more coffee breaks.
+    const roll = Math.random();
+    const home = bot.seatId;
+    if (roll < 0.5) {
+      const pickups = [bot.frontId, "sv-files", "cab-east"];
+      const drops = ["sv-files", "cab-east", "sv-rack"];
+      crew.forEach((other) => {
+        if (other.id !== bot.id) drops.push(other.frontId);
+      });
+      const from = pick(pickups);
+      let to = pick(drops);
+      let guard = 0;
+      while (to === from && guard < 6) {
+        to = pick(drops);
+        guard += 1;
+      }
+      bot.queue = [
+        { node: from, pose: "reach", seconds: 0.65, carry: "start" },
+        { node: to, pose: "reach", seconds: 0.75, carry: "end" },
+        { node: home, pose: "sit", seconds: rand(5, 10) },
+      ];
+    } else if (roll < 0.72) {
+      const spot = Math.random() < 0.55 ? "br-coffee" : "br-hang";
+      bot.queue = [
+        { node: spot, pose: spot === "br-coffee" ? "reach" : "stand", seconds: rand(2.6, 5) },
+        { node: home, pose: "sit", seconds: rand(5, 9) },
+      ];
+    } else if (roll < 0.88) {
+      const spot = Math.random() < 0.6 ? "mt-north" : "mt-s-mid";
+      bot.queue = [
+        { node: spot, pose: "stand", seconds: rand(2.6, 5) },
+        { node: home, pose: "sit", seconds: rand(4.5, 9) },
+      ];
+    } else {
+      bot.queue = [
+        { node: "ln-seat", pose: "stand", seconds: rand(2.4, 4.5) },
+        { node: home, pose: "sit", seconds: rand(4.5, 8) },
+      ];
+    }
+  }
+
+  function scriptStart(bot) {
+    if (reduce || !office.desks[bot.id]) {
+      standAt(bot, bot.seatId, "sit", 999);
+      bot.queue = [{ node: bot.seatId, pose: "sit", seconds: 999 }];
+      return;
+    }
+    const seat = bot.seatId;
+    const front = bot.frontId;
+    if (bot.id === "inbox-manager") {
+      const ids = office.findPath(front, office.desks["chief-of-staff"].front);
+      if (placeAlong(bot, ids, 0.38)) {
+        bot.carrying = true;
+        bot.folderNow = 1;
+        bot.folder.visible = true;
+        bot.gait = 1;
+        bot.phase = 2.1;
+        faceTravel(bot);
+        bot.queue = [
+          { node: office.desks["chief-of-staff"].front, pose: "reach", seconds: 0.8, carry: "end" },
+          { node: seat, pose: "sit", seconds: 7 },
+        ];
+        return;
+      }
+    }
+    if (bot.id === "content-coach") {
+      const ids = office.findPath("mt-door", "mt-north");
+      if (placeAlong(bot, ids, 0.4)) {
+        bot.gait = 1;
+        bot.phase = 1.2;
+        faceTravel(bot);
+        bot.queue = [
+          { node: "mt-north", pose: "stand", seconds: 4.5 },
+          { node: seat, pose: "sit", seconds: 6.5 },
+        ];
+        return;
+      }
+    }
+    if (bot.id === "opportunity-scout") {
+      const ids = office.findPath("sv-door", "sv-files");
+      if (placeAlong(bot, ids, 0.48)) {
+        bot.gait = 1;
+        bot.phase = 0.6;
+        faceTravel(bot);
+        bot.queue = [
+          { node: "sv-files", pose: "reach", seconds: 0.7, carry: "start" },
+          { node: office.desks["goal-tracker"].front, pose: "reach", seconds: 0.8, carry: "end" },
+          { node: seat, pose: "sit", seconds: 6 },
+        ];
+        return;
+      }
+    }
+    if (bot.id === "business-lab") {
+      standAt(bot, "br-hang", "stand", 5.5);
+      bot.queue = [
+        { node: "br-hang", pose: "stand", seconds: 5.5 },
+        { node: seat, pose: "sit", seconds: 7 },
+      ];
+      return;
+    }
+    const timers = {
+      "chief-of-staff": 6.5,
+      texts: 9,
+      "personal-shopper": 8,
+      "money-manager": 5.5,
+      "goal-tracker": 11,
+    };
+    const seconds = timers[bot.id] || 7;
+    standAt(bot, seat, "sit", seconds);
+    bot.queue = [{ node: seat, pose: "sit", seconds: seconds }];
+  }
+
+  crew.forEach(scriptStart);
+
+  function stepWalk(bot, dt) {
+    const target = bot.path[0];
+    if (!target) {
+      arrive(bot);
+      return;
+    }
+    const dx = target.x - bot.x;
+    const dz = target.z - bot.z;
+    const dist = Math.hypot(dx, dz) || 0.0001;
+    if (dist < 0.07) {
+      bot.x = target.x;
+      bot.z = target.z;
+      bot.nodeId = target.id;
+      bot.path.shift();
+      if (!bot.path.length) arrive(bot);
+      return;
+    }
+    const step = Math.min(dist, bot.speed * dt);
+    bot.x += (dx / dist) * step;
+    bot.z += (dz / dist) * step;
+    bot.phase += step * 8.5;
+    const yaw = Math.atan2(dx, dz);
+    bot.group.rotation.y = turnToward(bot.group.rotation.y, yaw, dt);
+  }
+
+  function stepAct(bot, dt) {
+    if (bot.face !== undefined) {
+      bot.group.rotation.y = turnToward(bot.group.rotation.y, bot.face, dt);
+    }
+    bot.timer -= dt;
+    if (bot.timer <= 0) finishAct(bot);
+  }
+
+  function applyPose(bot, t, dt) {
+    const sitTarget = bot.mode === "act" && bot.action && bot.action.pose === "sit" ? 1 : 0;
+    const reachTarget = bot.mode === "act" && bot.action && bot.action.pose === "reach" ? 1 : 0;
+    const gaitTarget = bot.mode === "walk" ? 1 : 0;
+    const blend = Math.min(1, dt * 6);
+    bot.sit += (sitTarget - bot.sit) * blend;
+    bot.reach += (reachTarget - bot.reach) * blend;
+    bot.gait += (gaitTarget - bot.gait) * blend;
+
+    const swing = Math.sin(bot.phase) * SWING * bot.gait * (1 - bot.sit);
+    bot.hipL.rotation.x = -swing + SIT.hip * bot.sit;
+    bot.hipR.rotation.x = swing + SIT.hip * bot.sit;
+    bot.kneeL.rotation.x = Math.max(0, -swing) * 1.15 * (1 - bot.sit) + SIT.knee * bot.sit;
+    bot.kneeR.rotation.x = Math.max(0, swing) * 1.15 * (1 - bot.sit) + SIT.knee * bot.sit;
+
+    const arm = swing * 0.85;
+    let shL = 0.1 + arm;
+    let shR = 0.1 - arm;
+    let elL = -0.35;
+    let elR = -0.35;
+    shL += (SIT.shoulder - shL) * bot.sit;
+    shR += (SIT.shoulder - shR) * bot.sit;
+    elL += (SIT.elbow - elL) * bot.sit;
+    elR += (SIT.elbow - elR) * bot.sit;
+
+    if (bot.carrying && bot.sit < 0.4) {
+      shR = -1.05;
+      elR = -0.7;
+    }
+    if (bot.reach > 0.01) {
+      shL = shL * (1 - bot.reach) + -1.05 * bot.reach;
+      shR = shR * (1 - bot.reach) + -1.1 * bot.reach;
+      elL = elL * (1 - bot.reach) + -0.95 * bot.reach;
+      elR = elR * (1 - bot.reach) + -0.9 * bot.reach;
+    }
+    const typing = bot.sit > 0.7 && bot.status === "Working" && bot.reach < 0.15 && !reduce;
+    if (typing) {
+      const wiggle = Math.sin(t * 9.5 + bot.phase0) * 0.14;
+      shL = SIT.shoulder + wiggle;
+      shR = SIT.shoulder - wiggle;
+      elL = SIT.elbow;
+      elR = SIT.elbow + 0.05;
+    } else if (bot.sit > 0.7 && bot.status === "Idle" && !reduce) {
+      const wiggle = Math.sin(t * 1.4 + bot.phase0) * 0.08;
+      shL = -0.35 + wiggle;
+      shR = -0.35 - wiggle;
+      elL = -0.4;
+      elR = -0.4;
+    }
+    bot.shoulderL.rotation.x = shL;
+    bot.shoulderR.rotation.x = shR;
+    bot.elbowL.rotation.x = elL;
+    bot.elbowR.rotation.x = elR;
+
+    const bob = reduce ? 0 : Math.abs(Math.sin(bot.phase)) * 0.05 * bot.gait;
+    const breathe = reduce ? 0 : Math.sin(t * 1.5 + bot.phase0) * 0.008;
+    bot.pelvis.position.y = -SIT.drop * bot.sit + bob + breathe;
+
+    let lookY = 0;
+    let lookX = 0;
+    if (!reduce && bot.mode === "act" && bot.sit > 0.45) {
+      if (bot.status === "Waiting on Luke") {
+        lookX = -0.32;
+        lookY = Math.sin(t * 0.7 + bot.phase0) * 0.18;
+      } else if (bot.status === "Done") {
+        lookY = Math.sin(t * 0.55 + bot.phase0) * 0.22;
+      } else if (bot.status === "Idle") {
+        lookY = Math.sin(t * 0.45 + bot.phase0) * 0.4;
+      } else {
+        lookX = Math.sin(t * 2.4 + bot.phase0) * 0.05;
+      }
+    }
+    bot.head.rotation.y += (lookY - bot.head.rotation.y) * Math.min(1, dt * 4);
+    bot.head.rotation.x += (lookX - bot.head.rotation.x) * Math.min(1, dt * 4);
+
+    if (bot.badge && !reduce) {
+      const pulse = 1 + 0.08 * Math.sin(t * 3 + bot.phase0);
+      bot.badge.scale.setScalar(0.34 * pulse);
+    }
+
+    const folderTarget = bot.carrying ? 1 : 0;
+    bot.folderNow += (folderTarget - bot.folderNow) * Math.min(1, dt * 8);
+    bot.folder.visible = bot.folderNow > 0.05;
+    if (bot.folder.visible) bot.folder.scale.setScalar(0.2 + 0.8 * bot.folderNow);
+
+    const laneTarget = bot.mode === "walk" ? bot.lane : 0;
+    bot.laneNow += (laneTarget - bot.laneNow) * Math.min(1, dt * 5);
+    const yaw = bot.group.rotation.y;
+    bot.group.position.set(
+      bot.x + Math.cos(yaw) * bot.laneNow,
+      0.035,
+      bot.z - Math.sin(yaw) * bot.laneNow
+    );
+    bot.group.updateMatrixWorld(true);
+  }
+
+  function sync(bucket) {
+    for (let i = 0; i < bucket.anchors.length; i += 1) {
+      bucket.mesh.setMatrixAt(i, bucket.anchors[i].matrixWorld);
+    }
+    bucket.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  function update(dt, t) {
+    for (let i = 0; i < crew.length; i += 1) {
+      const bot = crew[i];
+      if (bot.mode === "walk") stepWalk(bot, dt);
+      else stepAct(bot, dt);
+      applyPose(bot, t, dt);
+      shadowDummy.position.set(bot.group.position.x, 0.05, bot.group.position.z);
+      shadowDummy.rotation.x = -Math.PI / 2;
+      shadowDummy.scale.set(0.7, 0.55, 1);
+      shadowDummy.updateMatrix();
+      shadowMesh.setMatrixAt(i, shadowDummy.matrix);
+    }
+    shadowMesh.instanceMatrix.needsUpdate = true;
+    sync(thighs);
+    sync(shins);
+    sync(uppers);
+    sync(fores);
+  }
+
+  function get(id) {
+    for (let i = 0; i < crew.length; i += 1) {
+      if (crew[i].id === id) return crew[i];
+    }
+    return null;
+  }
+
+  function snapshot() {
+    return crew.map((bot) => ({
+      id: bot.id,
+      x: bot.x,
+      z: bot.z,
+      renderX: bot.group.position.x,
+      renderZ: bot.group.position.z,
+      mode: bot.mode,
+      carrying: bot.carrying,
+      nodeId: bot.nodeId,
+    }));
+  }
+
+  // Pose once so the first painted frame is not a T-pose.
+  update(0.016, 0.016);
+
+  return { bots: crew, update: update, get: get, snapshot: snapshot };
+}

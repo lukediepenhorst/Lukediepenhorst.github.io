@@ -7,7 +7,7 @@ Live site: https://lukediepenhorst.github.io
 ## Pages
 
 - [Luke Diepenhorst - Projects](https://lukediepenhorst.github.io/) — landing page
-- [Luke's Bot HQ](https://lukediepenhorst.github.io/bot-hq/) — low-poly 3D office with nine bots at desks
+- [Luke's Bot HQ](https://lukediepenhorst.github.io/bot-hq/) — low-poly 3D office where nine bots walk, carry files, and work at their desks
 - [Tulip City Lawn Care](https://lukediepenhorst.github.io/tulip-city-lawn-care/) — fictional demo business (Holland, Michigan)
 - [Honolulu Blue Tailgate Co.](https://lukediepenhorst.github.io/honolulu-blue-tailgate/) — fictional demo business (Detroit watch-party site; not affiliated with the NFL or the Detroit Lions)
 
@@ -24,4 +24,6 @@ Use one of these status strings:
 - `Waiting on Luke`
 - `Done`
 
-The page says “Statuses are updated manually for now.” The checked-in values are a sample, not a live feed.
+The page says the statuses are sample data. The checked-in values are a sample, not a live feed.
+
+Add `?debug=1` to the Bot HQ URL to draw the hallways the bots walk. If a desk is moved onto a hallway, the browser console names the collision.
