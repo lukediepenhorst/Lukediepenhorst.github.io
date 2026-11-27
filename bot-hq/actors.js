@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { BRAND } from "./brand.js";
 
 /*
   The nine bots: a simple skeleton, a walk/sit/type pose, and a to-do list.
@@ -104,6 +106,43 @@ function pick(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+function paintGeo(geo, color) {
+  const c = new THREE.Color(color);
+  const n = geo.attributes.position.count;
+  const arr = new Float32Array(n * 3);
+  for (let i = 0; i < n; i += 1) {
+    arr[i * 3] = c.r;
+    arr[i * 3 + 1] = c.g;
+    arr[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(arr, 3));
+  return geo;
+}
+
+function bubbleTexture(glyph, color) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "rgba(247, 241, 232, 0.95)";
+  ctx.beginPath();
+  ctx.arc(64, 58, 46, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(48, 96);
+  ctx.lineTo(58, 78);
+  ctx.lineTo(72, 96);
+  ctx.fill();
+  ctx.fillStyle = color;
+  ctx.font = "700 42px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(glyph, 64, 60);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 /**
  * @param {THREE.Scene} scene
  * @param {ReturnType<import("./office.js").buildOffice>} office
@@ -187,6 +226,20 @@ export function createCrew(scene, office, bots, options) {
   scene.add(shadowMesh);
   const shadowDummy = new THREE.Object3D();
 
+  const emoteMats = {
+    chat: new THREE.SpriteMaterial({ map: bubbleTexture("hi", BRAND.colors.teal), transparent: true, depthWrite: false }),
+    meet: new THREE.SpriteMaterial({ map: bubbleTexture("…", BRAND.colors.ink), transparent: true, depthWrite: false }),
+    mail: new THREE.SpriteMaterial({ map: bubbleTexture("✉", BRAND.colors.amber), transparent: true, depthWrite: false }),
+  };
+  const bubbles = [0, 1, 2].map(() => {
+    const sprite = new THREE.Sprite(emoteMats.chat);
+    sprite.visible = false;
+    sprite.scale.setScalar(0.38);
+    sprite.raycast = function () {};
+    scene.add(sprite);
+    return sprite;
+  });
+
   const crew = [];
 
   function addBone(parent, x, y, z, length, bucket) {
@@ -200,56 +253,83 @@ export function createCrew(scene, office, bots, options) {
     return pivot;
   }
 
-  function addAccessory(mark, head, torso, mat) {
-    if (mark === "antenna") {
-      const pole = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.16, 0.03), mat);
-      pole.position.y = 0.22;
-      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.07), mat);
-      tip.position.y = 0.32;
-      head.add(pole, tip);
-    } else if (mark === "mail") {
-      const mail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.11, 0.025), paperMat);
-      mail.position.set(0, 0.04, 0.13);
-      torso.add(mail);
-    } else if (mark === "nubs") {
-      [-0.12, 0.12].forEach((x) => {
-        const nub = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, 0.06), mat);
-        nub.position.set(x, 0.18, 0);
-        head.add(nub);
-      });
-    } else if (mark === "lamp") {
-      const stalk = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.03), limbMat);
-      stalk.position.y = 0.2;
-      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), bulbMat);
-      bulb.position.y = 0.28;
-      head.add(stalk, bulb);
-    } else if (mark === "bag") {
-      const bag = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.08), mat);
-      bag.position.set(-0.24, -0.04, 0.02);
-      torso.add(bag);
-    } else if (mark === "headset") {
-      const band = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.045, 0.18), limbMat);
-      band.position.y = 0.16;
-      head.add(band);
-      [-0.14, 0.14].forEach((x) => {
-        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, 0.05), mat);
-        pad.position.set(x, 0.08, 0.02);
-        head.add(pad);
-      });
-    } else if (mark === "radar") {
-      const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.03, 8), mat);
-      dish.position.y = 0.2;
-      head.add(dish);
-    } else if (mark === "coin") {
-      const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.025, 10), coinMat);
-      coin.rotation.x = Math.PI / 2;
-      coin.position.set(0.02, 0.02, 0.13);
-      torso.add(coin);
-    } else if (mark === "fin") {
-      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.16, 0.12), mat);
-      fin.position.set(0, 0.2, -0.04);
-      head.add(fin);
+  const propMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+
+  // One mesh per bot, so a prop is a single draw instead of a handful of parts.
+  function makeProp(parts) {
+    const list = parts.map((part) => {
+      const geo = part.geo.clone();
+      if (part.rx) geo.rotateX(part.rx);
+      if (part.ry) geo.rotateY(part.ry);
+      geo.translate(part.x || 0, part.y || 0, part.z || 0);
+      paintGeo(geo, part.color);
+      return geo;
+    });
+    const merged = mergeGeometries(list, false);
+    list.forEach((geo) => geo.dispose());
+    const mesh = new THREE.Mesh(merged, propMat);
+    mesh.raycast = function () {};
+    return mesh;
+  }
+
+  function propFor(id, accent) {
+    const ink = BRAND.colors.ink;
+    const cream = BRAND.colors.cream;
+    const wood = BRAND.colors.wood;
+    if (id === "chief-of-staff") {
+      return makeProp([
+        { geo: new THREE.BoxGeometry(0.16, 0.22, 0.02), color: ink, x: 0.02, y: 0.02, z: 0.13 },
+        { geo: new THREE.BoxGeometry(0.13, 0.16, 0.01), color: accent, x: 0.02, y: 0.02, z: 0.145 },
+      ]);
     }
+    if (id === "inbox-manager") {
+      return makeProp([
+        { geo: new THREE.BoxGeometry(0.2, 0.13, 0.025), color: cream, y: 0.04, z: 0.14 },
+        { geo: new THREE.BoxGeometry(0.2, 0.015, 0.01), color: accent, y: 0.0, z: 0.155 },
+      ]);
+    }
+    if (id === "texts") {
+      return makeProp([
+        { geo: new THREE.BoxGeometry(0.07, 0.13, 0.015), color: ink, x: 0.16, y: 0.12, z: 0.08 },
+        { geo: new THREE.BoxGeometry(0.055, 0.09, 0.01), color: accent, x: 0.16, y: 0.12, z: 0.09 },
+      ]);
+    }
+    if (id === "business-lab") {
+      return makeProp([
+        { geo: new THREE.BoxGeometry(0.025, 0.1, 0.025), color: ink, y: 0.22, z: 0 },
+        { geo: new THREE.SphereGeometry(0.055, 6, 5), color: "#fff3cc", y: 0.3, z: 0 },
+      ]);
+    }
+    if (id === "personal-shopper") {
+      return makeProp([
+        { geo: new THREE.BoxGeometry(0.14, 0.15, 0.08), color: accent, x: -0.24, y: -0.02, z: 0.02 },
+        { geo: new THREE.BoxGeometry(0.1, 0.02, 0.02), color: wood, x: -0.24, y: 0.08, z: 0.02 },
+      ]);
+    }
+    if (id === "content-coach") {
+      return makeProp([
+        { geo: new THREE.BoxGeometry(0.16, 0.1, 0.08), color: ink, y: 0.02, z: 0.14 },
+        { geo: new THREE.CylinderGeometry(0.035, 0.035, 0.04, 8), color: accent, y: 0.02, z: 0.18, rx: Math.PI / 2 },
+      ]);
+    }
+    if (id === "opportunity-scout") {
+      return makeProp([
+        { geo: new THREE.CylinderGeometry(0.035, 0.04, 0.1, 7), color: ink, x: -0.05, y: 0.08, z: 0.16, rx: Math.PI / 2 },
+        { geo: new THREE.CylinderGeometry(0.035, 0.04, 0.1, 7), color: ink, x: 0.05, y: 0.08, z: 0.16, rx: Math.PI / 2 },
+        { geo: new THREE.BoxGeometry(0.12, 0.02, 0.02), color: accent, y: 0.08, z: 0.14 },
+      ]);
+    }
+    if (id === "money-manager") {
+      return makeProp([
+        { geo: new THREE.BoxGeometry(0.14, 0.18, 0.02), color: ink, y: 0.02, z: 0.13 },
+        { geo: new THREE.CylinderGeometry(0.045, 0.045, 0.02, 8), color: "#f0d48a", x: 0.1, y: 0.08, z: 0.15, rx: Math.PI / 2 },
+      ]);
+    }
+    return makeProp([
+      { geo: new THREE.BoxGeometry(0.14, 0.18, 0.02), color: wood, x: 0.16, y: 0.02, z: 0.08 },
+      { geo: new THREE.BoxGeometry(0.1, 0.1, 0.01), color: cream, x: 0.16, y: 0.02, z: 0.095 },
+      { geo: new THREE.BoxGeometry(0.04, 0.06, 0.02), color: accent, x: 0.16, y: 0.16, z: 0.08 },
+    ]);
   }
 
   bots.forEach((info, index) => {
@@ -277,7 +357,9 @@ export function createCrew(scene, office, bots, options) {
     eyes.position.set(0, 0.02, 0.16);
     head.add(headMesh, eyes);
     pelvis.add(head);
-    addAccessory(desk ? desk.mark : "antenna", head, torso, mat);
+    const prop = propFor(info.id, info.accent);
+    const propOnHead = info.id === "business-lab" || info.id === "opportunity-scout" || info.id === "texts";
+    (propOnHead ? head : torso).add(prop);
 
     const hipL = addBone(pelvis, -0.1, HIP_Y, 0, THIGH, thighs);
     const kneeL = addBone(hipL, 0, -THIGH, 0, SHIN, shins);
@@ -369,6 +451,8 @@ export function createCrew(scene, office, bots, options) {
       elbowR: elbowR,
       folder: folder,
       folderNow: 0,
+      prop: prop,
+      emote: "",
       badge: badge,
       labelEl: labelEl,
       seatId: seatId,
@@ -477,6 +561,7 @@ export function createCrew(scene, office, bots, options) {
     bot.mode = "act";
     bot.action = next;
     bot.timer = next.seconds;
+    bot.emote = next.emote || "";
     if (next.carry === "start") bot.carrying = true;
     const n = office.nodes[next.node];
     bot.face = n && n.face !== undefined ? n.face : bot.group.rotation.y;
@@ -528,23 +613,55 @@ export function createCrew(scene, office, bots, options) {
         { node: to, pose: "reach", seconds: 0.75, carry: "end" },
         { node: home, pose: "sit", seconds: rand(5, 10) },
       ];
-    } else if (roll < 0.72) {
+    } else if (roll < 0.68) {
       const spot = Math.random() < 0.55 ? "br-coffee" : "br-hang";
       bot.queue = [
-        { node: spot, pose: spot === "br-coffee" ? "reach" : "stand", seconds: rand(2.6, 5) },
+        { node: spot, pose: spot === "br-coffee" ? "reach" : "stand", seconds: rand(2.6, 5), emote: "chat" },
         { node: home, pose: "sit", seconds: rand(5, 9) },
       ];
-    } else if (roll < 0.88) {
+    } else if (roll < 0.84) {
       const spot = Math.random() < 0.6 ? "mt-north" : "mt-s-mid";
       bot.queue = [
-        { node: spot, pose: "stand", seconds: rand(2.6, 5) },
+        { node: spot, pose: "stand", seconds: rand(2.6, 5), emote: "meet" },
         { node: home, pose: "sit", seconds: rand(4.5, 9) },
+      ];
+    } else if (roll < 0.92) {
+      bot.queue = [
+        { node: "lb-wait", pose: "stand", seconds: rand(2.4, 4.5) },
+        { node: home, pose: "sit", seconds: rand(4.5, 8) },
       ];
     } else {
       bot.queue = [
         { node: "ln-seat", pose: "stand", seconds: rand(2.4, 4.5) },
         { node: home, pose: "sit", seconds: rand(4.5, 8) },
       ];
+    }
+  }
+
+  // Drop whatever they were doing and walk somewhere new. Used for group meetings.
+  function sendTo(bot, queue) {
+    bot.queue = queue;
+    bot.carrying = false;
+    bot.emote = (queue[0] && queue[0].emote) || "";
+    const walking = beginWalk(bot, queue[0].node);
+    if (!walking) beginAct(bot);
+  }
+
+  let meetingIn = 9;
+  function maybeMeeting(dt) {
+    if (reduce) return;
+    meetingIn -= dt;
+    if (meetingIn > 0) return;
+    meetingIn = 26 + Math.random() * 14;
+    const free = crew.filter((bot) => bot.mode === "act" && bot.action && bot.action.pose === "sit" && !bot.carrying);
+    if (free.length < 3) return;
+    const spots = ["mt-s-mid", "mt-west", "mt-east"];
+    for (let i = 0; i < 3; i += 1) {
+      const bot = free.splice(Math.floor(Math.random() * free.length), 1)[0];
+      sendTo(bot, [
+        { node: spots[i], pose: "stand", seconds: rand(5, 8), emote: "meet" },
+        { node: bot.seatId, pose: "sit", seconds: rand(5, 9) },
+      ]);
     }
   }
 
@@ -600,9 +717,31 @@ export function createCrew(scene, office, bots, options) {
       }
     }
     if (bot.id === "business-lab") {
-      standAt(bot, "br-hang", "stand", 5.5);
+      standAt(bot, "br-hang", "stand", 6);
+      bot.emote = "chat";
+      bot.face = Math.atan2(8.35 - 6.45, 6.45 - 3.25);
+      bot.group.rotation.y = bot.face;
       bot.queue = [
-        { node: "br-hang", pose: "stand", seconds: 5.5 },
+        { node: "br-hang", pose: "stand", seconds: 6, emote: "chat" },
+        { node: seat, pose: "sit", seconds: 7 },
+      ];
+      return;
+    }
+    if (bot.id === "money-manager") {
+      standAt(bot, "br-coffee", "reach", 6);
+      bot.emote = "chat";
+      bot.face = Math.atan2(6.45 - 8.35, 3.25 - 6.45);
+      bot.group.rotation.y = bot.face;
+      bot.queue = [
+        { node: "br-coffee", pose: "reach", seconds: 6, emote: "chat" },
+        { node: seat, pose: "sit", seconds: 7 },
+      ];
+      return;
+    }
+    if (bot.id === "goal-tracker") {
+      standAt(bot, "lb-wait", "stand", 8);
+      bot.queue = [
+        { node: "lb-wait", pose: "stand", seconds: 8 },
         { node: seat, pose: "sit", seconds: 7 },
       ];
       return;
@@ -611,8 +750,6 @@ export function createCrew(scene, office, bots, options) {
       "chief-of-staff": 6.5,
       texts: 9,
       "personal-shopper": 8,
-      "money-manager": 5.5,
-      "goal-tracker": 11,
     };
     const seconds = timers[bot.id] || 7;
     standAt(bot, seat, "sit", seconds);
@@ -733,6 +870,11 @@ export function createCrew(scene, office, bots, options) {
       const pulse = 1 + 0.08 * Math.sin(t * 3 + bot.phase0);
       bot.badge.scale.setScalar(0.34 * pulse);
     }
+    if (bot.prop && !reduce) {
+      bot.prop.rotation.z = Math.sin(t * 1.6 + bot.phase0) * 0.06 * (1 - bot.gait);
+    }
+    if (bot.carrying) bot.emote = "mail";
+    else if (bot.mode === "walk" && bot.emote === "mail") bot.emote = "";
 
     const folderTarget = bot.carrying ? 1 : 0;
     bot.folderNow += (folderTarget - bot.folderNow) * Math.min(1, dt * 8);
@@ -758,6 +900,11 @@ export function createCrew(scene, office, bots, options) {
   }
 
   function update(dt, t) {
+    maybeMeeting(dt);
+    const coffee = crew.filter((bot) => bot.mode === "act" && (bot.nodeId === "br-coffee" || bot.nodeId === "br-hang"));
+    if (coffee.length >= 2) coffee.forEach((bot) => { bot.emote = "chat"; });
+    let bubble = 0;
+    bubbles.forEach((sprite) => { sprite.visible = false; });
     for (let i = 0; i < crew.length; i += 1) {
       const bot = crew[i];
       if (bot.mode === "walk") stepWalk(bot, dt);
@@ -768,6 +915,13 @@ export function createCrew(scene, office, bots, options) {
       shadowDummy.scale.set(0.7, 0.55, 1);
       shadowDummy.updateMatrix();
       shadowMesh.setMatrixAt(i, shadowDummy.matrix);
+      if (bot.emote && emoteMats[bot.emote] && bubble < bubbles.length && !reduce) {
+        const sprite = bubbles[bubble];
+        sprite.material = emoteMats[bot.emote];
+        sprite.position.set(bot.group.position.x + 0.22, 1.72, bot.group.position.z);
+        sprite.visible = true;
+        bubble += 1;
+      }
     }
     shadowMesh.instanceMatrix.needsUpdate = true;
     sync(thighs);

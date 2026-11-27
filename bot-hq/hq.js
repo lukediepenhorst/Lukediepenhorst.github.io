@@ -3,6 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
 import { buildOffice } from "./office.js";
 import { createCrew } from "./actors.js";
+import { applyBrandToPage } from "./brand.js";
 
 /*
   Scene, camera, and clicks.
@@ -22,8 +23,8 @@ import { createCrew } from "./actors.js";
 const MAX_PIXEL_RATIO = 2;
 
 const HOME = {
-  wide: { fov: 34, pos: [11.2, 13.2, 13.4], target: [0.4, 0.5, 0.2] },
-  narrow: { fov: 46, pos: [8.5, 16.8, 15.2], target: [0.2, 0.3, 0.6] },
+  wide: { fov: 32, pos: [12.4, 16.2, 18.6], target: [-0.4, 0.4, 2.2] },
+  narrow: { fov: 48, pos: [8.2, 19.5, 20.4], target: [0, 0.2, 2.6] },
 };
 
 const STATUS_SPEED = {
@@ -82,6 +83,7 @@ function smoothstep(t) {
 }
 
 function startScene(botInfos) {
+  applyBrandToPage();
   const viewport = document.getElementById("viewport");
   const coarse = window.matchMedia("(pointer: coarse)").matches;
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -103,7 +105,7 @@ function startScene(botInfos) {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xa9cbe4);
-  scene.fog = new THREE.Fog(0xa9cbe4, 34, 74);
+  scene.fog = new THREE.Fog(0xa9cbe4, 38, 86);
 
   const camera = new THREE.PerspectiveCamera(36, 1, 0.08, 120);
   const labelRenderer = new CSS2DRenderer();
@@ -121,7 +123,7 @@ function startScene(botInfos) {
   controls.zoomSpeed = 0.85;
   controls.panSpeed = 0.7;
   controls.minDistance = 3.2;
-  controls.maxDistance = 26;
+  controls.maxDistance = 34;
   controls.minPolarAngle = 0.08;
   controls.maxPolarAngle = Math.PI / 2 - 0.08;
   controls.mouseButtons = {
@@ -138,9 +140,11 @@ function startScene(botInfos) {
   const sun = new THREE.DirectionalLight(0xfff8f0, 1.35);
   sun.position.set(9, 16, 11);
   scene.add(sun);
-  const warm = new THREE.PointLight(0xffb26b, 7, 20, 2);
+  const warm = new THREE.PointLight(0xffb26b, 7, 22, 2);
   warm.position.set(-1.2, 2.4, 1.4);
-  scene.add(warm);
+  const cool = new THREE.PointLight(0xc5e6ff, 4, 16, 2);
+  cool.position.set(6.2, 2.3, -5);
+  scene.add(warm, cool);
 
   const office = buildOffice(scene, botInfos, { debug: debug });
   office.screens.forEach((screen) => {
@@ -173,6 +177,7 @@ function startScene(botInfos) {
     return narrow() ? HOME.narrow : HOME.wide;
   }
 
+  let quality = "high";
   let framed = false;
   function frameHome() {
     const home = homeView();
@@ -361,7 +366,8 @@ function startScene(botInfos) {
     if (!framed) frameHome();
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    const ratio = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
+    const cap = quality === "low" ? 1 : MAX_PIXEL_RATIO;
+    const ratio = Math.min(window.devicePixelRatio || 1, cap);
     renderer.setPixelRatio(ratio);
     renderer.setSize(width, height, false);
     labelRenderer.setSize(width, height);
@@ -374,7 +380,7 @@ function startScene(botInfos) {
     const target = controls.target;
     const x = THREE.MathUtils.clamp(target.x, -8.5, 8.5);
     const y = THREE.MathUtils.clamp(target.y, 0.25, 2.4);
-    const z = THREE.MathUtils.clamp(target.z, -6.8, 6.8);
+    const z = THREE.MathUtils.clamp(target.z, -6.8, 12);
     if (x !== target.x || y !== target.y || z !== target.z) {
       const dx = x - target.x;
       const dy = y - target.y;
@@ -431,6 +437,8 @@ function startScene(botInfos) {
     { once: true }
   );
 
+  let slowTime = 0;
+  let smoothTime = 0;
   const clock = new THREE.Clock();
   const followDelta = new THREE.Vector3();
   let announced = false;
@@ -443,6 +451,27 @@ function startScene(botInfos) {
     // The camera reset uses the real elapsed time so it still finishes.
     const dt = Math.min(raw, 0.05);
     const t = clock.elapsedTime;
+    // Drop pixel ratio if the frame time stays over ~40ms. The first second is ignored
+    // so a slow startup does not immediately switch the whole office to low quality.
+    if (t > 1.2) {
+      if (raw > 0.04) {
+        slowTime += raw;
+        smoothTime = 0;
+      } else {
+        smoothTime += raw;
+        slowTime = Math.max(0, slowTime - raw);
+      }
+      if (quality === "high" && slowTime > 1.6) {
+        quality = "low";
+        office.setQuality("low");
+        resize();
+      } else if (quality === "low" && smoothTime > 2.5) {
+        quality = "high";
+        office.setQuality("high");
+        slowTime = 0;
+        resize();
+      }
+    }
     office.update(t);
     crew.update(dt, t);
 
@@ -517,7 +546,9 @@ function startScene(botInfos) {
           " draws · " +
           renderer.info.render.triangles +
           " tris · paths " +
-          (office.pathsOk ? "ok" : "BROKEN");
+          (office.pathsOk ? "ok" : "BROKEN") +
+          " · " +
+          quality;
         frames = 0;
         fpsAccum = 0;
       }
@@ -546,6 +577,7 @@ function startScene(botInfos) {
         triangles: renderer.info.render.triangles,
         pathsOk: office.pathsOk,
         pathErrors: office.pathErrors,
+        quality: quality,
       };
     },
     bots: function () {
