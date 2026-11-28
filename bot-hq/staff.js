@@ -14,6 +14,8 @@ const GREETINGS = [
 ];
 
 const PEOPLE = [
+  { floor: 0, x: 2.2, z: 8.2, sit: true, face: Math.PI },
+  { floor: 0, x: -4.2, z: 3.2, sit: false, present: true, face: 0 },
   { floor: 42, x: 4.7, z: -4.15, sit: true, face: Math.PI },
   { floor: 42, x: 7.8, z: -4.15, sit: true, face: Math.PI },
   { floor: 42, x: 8.5, z: -6.4, sit: false, present: true, face: -Math.PI / 2 },
@@ -57,6 +59,7 @@ export function createStaff(scene) {
   let phrase = "";
   let cheer = false;
   const cheerRooms = {
+    0: { x0: -4, z0: 5, x1: 4, z1: 10 },
     42: { x0: 1.2, z0: -7.8, x1: 9.6, z1: -2.6 },
     41: { x0: -3.2, z0: -7.2, x1: 3.2, z1: -3.4 },
     43: { x0: 4.4, z0: -7.2, x1: 8.6, z1: -3.6 },

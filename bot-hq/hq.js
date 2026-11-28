@@ -699,6 +699,8 @@ function startScene(botInfos) {
   let floorId = 42;
   let floorBusy = false;
   let ceoOn = false;
+  let walkOn = false;
+  const walker = { x: -2.2, z: 9.2, yaw: Math.PI, pitch: 0.12 };
   let bird = false;
   let lastGreet = "";
   let confettiT = 0;
@@ -733,24 +735,28 @@ function startScene(botInfos) {
     if (crew.setActiveFloor) crew.setActiveFloor(next, floor ? floor.stations : null);
     else crew.setVisible(next === 42);
     staff.show(next);
-    if (ceoOn) ceo.place(-1.2, next === 44 ? 6.2 : 10.4);
+    if (ceoOn) ceo.place(-1.2, next === 44 ? 2.2 : next === 0 ? 4.5 : 10.4);
+    if (walkOn) {
+      walker.x = -1.2;
+      walker.z = next === 44 ? 2.2 : next === 0 ? 4.5 : 10.4;
+    }
     document.querySelectorAll("#floor-switch button").forEach((button) => {
       button.setAttribute("aria-pressed", Number(button.dataset.floor) === next ? "true" : "false");
     });
   }
   function setFloor(id) {
     const next = Number(id);
-    if ([41, 42, 43, 44].indexOf(next) < 0 || next === floorId) return;
+    if ([0, 41, 42, 43, 44].indexOf(next) < 0 || next === floorId) return;
     if (floorBusy) {
       if (ride && !ride.swapped) ride.next = next;
       else pendingFloor = next;
       return;
     }
     floorBusy = true;
-    const names = { 41: "Sales floor", 42: "Luke's Bot HQ", 43: "Innovation lab", 44: "Penthouse" };
+    const names = { 0: "Lobby", 41: "Sales floor", 42: "Luke's Bot HQ", 43: "Innovation lab", 44: "Penthouse" };
     if (floorCard) {
       floorCard.hidden = false;
-      floorCard.textContent = "Floor " + (next === 44 ? "PH" : next) + " · " + names[next];
+      floorCard.textContent = (next === 0 ? "G" : next === 44 ? "PH" : "Floor " + next) + " · " + names[next];
     }
     if (reduce) {
       commitFloor(next);
@@ -856,6 +862,10 @@ function startScene(botInfos) {
   }
 
   function startCeo() {
+    if (walkOn) {
+      walkOn = false;
+      if (walkButton) walkButton.setAttribute("aria-pressed", "false");
+    }
     if (intro) endIntro(false);
     if (tour || tourArm) stopTour();
     if (bird) setBird(false);
@@ -959,9 +969,82 @@ function startScene(botInfos) {
   if (birdButton) birdButton.addEventListener("click", () => setBird(!bird));
   if (ceoButton) ceoButton.addEventListener("click", () => { if (ceoOn) stopCeo(); else startCeo(); });
   if (exitButton) exitButton.addEventListener("click", () => stopCeo());
+  const walkButton = document.getElementById("btn-walk");
+  const help = document.getElementById("help");
+  const HELP_KEY = "bothq-help-seen";
+  function setHelp(open) {
+    if (!help) return;
+    help.hidden = !open;
+    if (!open) localStorage.setItem(HELP_KEY, "1");
+  }
+  if (!debug && !localStorage.getItem(HELP_KEY)) setHelp(true);
+  const helpClose = document.getElementById("help-close");
+  if (helpClose) helpClose.addEventListener("click", () => setHelp(false));
+  function startWalk() {
+    if (intro) endIntro(false);
+    if (tour || tourArm) stopTour();
+    if (ceoOn) stopCeo(true);
+    if (bird) setBird(false);
+    walkOn = true;
+    controls.enabled = false;
+    if (joystick) joystick.hidden = false;
+    if (walkButton) walkButton.setAttribute("aria-pressed", "true");
+    if (exitButton) exitButton.hidden = false;
+  }
+  function stopWalk() {
+    if (!walkOn) return;
+    walkOn = false;
+    joy.x = 0;
+    joy.y = 0;
+    controls.enabled = true;
+    if (joystick && !ceoOn) joystick.hidden = true;
+    if (walkButton) walkButton.setAttribute("aria-pressed", "false");
+    if (exitButton && !ceoOn) exitButton.hidden = true;
+    const home = homeView();
+    tween = {
+      t: 0,
+      fromPos: camera.position.clone(),
+      toPos: new THREE.Vector3(home.pos[0], home.pos[1], home.pos[2]),
+      fromTgt: controls.target.clone(),
+      toTgt: new THREE.Vector3(home.target[0], home.target[1], home.target[2]),
+      fromFov: camera.fov,
+      toFov: home.fov,
+    };
+  }
+  if (walkButton) walkButton.addEventListener("click", () => { if (walkOn) stopWalk(); else startWalk(); });
+  if (exitButton) {
+    exitButton.addEventListener("click", () => {
+      if (walkOn) stopWalk();
+    });
+  }
+  let lookDrag = null;
+  renderer.domElement.addEventListener("pointermove", (event) => {
+    if (!walkOn || !lookDrag || event.pointerId !== lookDrag.id) return;
+    walker.yaw -= (event.clientX - lookDrag.x) * 0.005;
+    walker.pitch = Math.max(-0.7, Math.min(0.9, walker.pitch - (event.clientY - lookDrag.y) * 0.004));
+    lookDrag.x = event.clientX;
+    lookDrag.y = event.clientY;
+  });
+  renderer.domElement.addEventListener("pointerup", (event) => {
+    if (lookDrag && event.pointerId === lookDrag.id) lookDrag = null;
+  });
+  renderer.domElement.addEventListener("pointerdown", (event) => {
+    if (walkOn && event.button === 0) lookDrag = { x: event.clientX, y: event.clientY, id: event.pointerId };
+  });
+  renderer.domElement.addEventListener("wheel", (event) => {
+    if (!walkOn) return;
+    walker.pitch = Math.max(-0.7, Math.min(0.9, walker.pitch - Math.sign(event.deltaY) * 0.06));
+  }, { passive: true });
+
   window.addEventListener("keydown", (event) => {
     held[event.code] = true;
-    if (ceoOn && ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(event.code) >= 0) {
+    const floors = { Digit0: 0, Numpad0: 0, KeyG: 0, Digit1: 41, Numpad1: 41, Digit2: 42, Numpad2: 42, Digit3: 43, Numpad3: 43, Digit4: 44, Numpad4: 44, KeyP: 44 };
+    if (!event.metaKey && !event.ctrlKey && floors[event.code] !== undefined) {
+      setFloor(floors[event.code]);
+      event.preventDefault();
+    }
+    if (event.key === "?" || event.key === "h" || event.key === "H") setHelp(help ? help.hidden : true);
+    if ((ceoOn || walkOn) && ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(event.code) >= 0) {
       event.preventDefault();
     }
   });
@@ -1069,10 +1152,43 @@ function startScene(botInfos) {
     } else {
       stepConfetti(dt);
     }
-    controls.enabled = !ceoOn;
+    controls.enabled = !ceoOn && !walkOn;
+    if (walkOn && !ride && !ceoOn) {
+      let ix = joy.x;
+      let iz = joy.y;
+      if (held.KeyW || held.ArrowUp) iz += 1;
+      if (held.KeyS || held.ArrowDown) iz -= 1;
+      if (held.KeyD || held.ArrowRight) ix += 1;
+      if (held.KeyA || held.ArrowLeft) ix -= 1;
+      const fx = Math.sin(walker.yaw);
+      const fz = Math.cos(walker.yaw);
+      const mx = fx * iz + fz * ix;
+      const mz = fz * iz - fx * ix;
+      const len = Math.hypot(mx, mz);
+      if (len > 0.05) {
+        const step = Math.min(3.1 * dt, 0.45);
+        const nx = walker.x + (mx / len) * step;
+        const nz = walker.z + (mz / len) * step;
+        if (!blockedCell(nx, nz)) {
+          walker.x = nx;
+          walker.z = nz;
+        } else if (!blockedCell(nx, walker.z)) walker.x = nx;
+        else if (!blockedCell(walker.x, nz)) walker.z = nz;
+      }
+      const cp = Math.cos(walker.pitch);
+      camera.position.set(walker.x, 1.62, walker.z);
+      controls.target.set(
+        walker.x + Math.sin(walker.yaw) * cp,
+        1.62 + Math.sin(walker.pitch),
+        walker.z + Math.cos(walker.yaw) * cp
+      );
+      camera.lookAt(controls.target);
+    }
 
     if (ride) {
       stepRide(dt);
+    } else if (walkOn) {
+      // Camera was placed above. Orbit stays off until Exit.
     } else if (intro) {
       intro.t += Math.min(raw, 0.05);
       // Hold on the exterior sign, then glide up to the floor.

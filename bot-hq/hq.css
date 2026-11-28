@@ -149,9 +149,9 @@ a { touch-action: manipulation; }
   .home-link { display: none; }
   .tod { display: none; }
   .brand-copy h1 { font-size: 0.78rem; }
-  .titles { flex: 0 1 92px; }
-  .brand-copy { max-width: 56px; }
-  .floor-switch { margin-left: auto; flex: 0 0 auto; }
+  .titles { flex: 0 0 72px; overflow: hidden; }
+  .brand-lockup, .brand-copy { min-width: 0; max-width: 72px; overflow: hidden; }
+  .floor-switch { margin-left: 4px; flex: 0 0 auto; }
   .brand-copy h1 {
     white-space: nowrap;
     overflow: hidden;
@@ -159,7 +159,39 @@ a { touch-action: manipulation; }
   }
   .tagline, .sub { display: none; }
   .brand-mark .logo { width: 28px; height: 28px; }
-  .floor-switch button { min-width: 32px; padding: 0 6px; }
+  .floor-switch button { width: 28px; min-width: 0; padding: 0; font-size: 0.68rem; }
+}
+
+.help[hidden] { display: none !important; }
+.help {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 10, 8, 0.45);
+  padding: 16px;
+}
+
+.help-card {
+  width: min(420px, 100%);
+  padding: 18px 18px 14px;
+  border-radius: 16px;
+  background: #1c1612;
+  color: #f7f1ea;
+}
+
+.help-card h2 { margin: 0 0 8px; font-size: 1.2rem; }
+.help-card ul { margin: 0 0 12px; padding-left: 18px; }
+.help-card li { margin: 4px 0; }
+.help-card button { min-height: 40px; }
+
+.help-phone { display: none; }
+@media (max-width: 760px), (pointer: coarse) {
+  .help-desk { display: none; }
+  .help-phone { display: block; }
+}
 }
 
 .topbar a,
@@ -683,4 +715,13 @@ button.bot-label {
   .spinner { animation: none; }
   .hint { transition: none; }
   .roster { transition: none; }
+}
+
+@media (max-width: 760px) {
+  .floor-switch button {
+    width: 28px;
+    min-width: 0;
+    padding: 0;
+    font-size: 0.68rem;
+  }
 }

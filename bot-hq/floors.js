@@ -54,7 +54,7 @@ function merge(list, material, parent) {
 
 function elevatorButtons(parent, z) {
   const buttons = [];
-  [44, 43, 42, 41].forEach((level, i) => {
+  [44, 43, 42, 41, 0].forEach((level, i) => {
     const button = new THREE.Mesh(
       new THREE.BoxGeometry(0.34, 0.2, 0.04),
       new THREE.MeshBasicMaterial({ color: level === 42 ? 0xffb15a : 0x24303c })
@@ -180,9 +180,10 @@ function buildKind(kind) {
   const blocks = [];
   const sales = kind === "sales";
   const lab = kind === "lab";
+  const lobby = kind === "lobby";
   const accent = sales ? "#3ddecb" : lab ? "#7ee0ff" : "#ffb15a";
-  const wall = sales ? "#e7eef5" : lab ? "#f3f6f4" : "#f7f1e8";
-  const floorColor = sales ? "#243246" : lab ? "#d9d3c6" : "#c4b49a";
+  const wall = lobby ? "#f7f1e8" : sales ? "#e7eef5" : lab ? "#f3f6f4" : "#f7f1e8";
+  const floorColor = lobby ? "#5c3b2a" : sales ? "#243246" : lab ? "#d9d3c6" : "#c4b49a";
   const block = shell(lit, glow, blocks, accent, wall, floorColor);
   panesFor(panes);
 
@@ -190,7 +191,53 @@ function buildKind(kind) {
   let arm = null;
   const blink = [];
 
-  if (sales) {
+  let door = null;
+  const directory = [];
+  if (lobby) {
+    box(lit, "#f7f3ea", 16, 0.05, 8, 0, 0.1, 4);
+    box(lit, "#3e281c", 2.4, 0.9, 0.7, -1.6, 0.5, 6.2);
+    box(glow, "#ffb15a", 2.2, 0.03, 0.04, -1.6, 0.96, 6.5);
+    block(-2.9, 5.8, -0.3, 6.6);
+    box(lit, "#1c1612", 4.2, 1.3, 0.08, -1.2, 1.7, -7.75);
+    box(glow, "#ffb15a", 3.8, 0.06, 0.02, -1.2, 2.2, -7.7);
+    // Directory board. Each row is a button that calls the elevator.
+    [[0, "G  Lobby"], [41, "41  Sales"], [42, "42  HQ"], [43, "43  Lab"], [44, "PH  Penthouse"]].forEach((row, i) => {
+      const button = new THREE.Mesh(
+        new THREE.BoxGeometry(2.4, 0.22, 0.05),
+        new THREE.MeshBasicMaterial({ color: i === 2 ? 0xffb15a : 0x2a241c })
+      );
+      button.position.set(5.6, 1.85 - i * 0.28, -7.72);
+      button.userData.floor = row[0];
+      group.add(button);
+      directory.push(button);
+    });
+    box(lit, "#1c1612", 2.6, 1.7, 0.08, 5.6, 1.35, -7.82);
+    // Revolving door: four glass wings on a hub.
+    door = new THREE.Group();
+    const wingMat = new THREE.MeshBasicMaterial({ color: 0xd5eef8, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+    for (let i = 0; i < 4; i += 1) {
+      const wing = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 2.1), wingMat);
+      wing.position.x = 0.55;
+      wing.rotation.y = (i / 4) * Math.PI * 2;
+      door.add(wing);
+    }
+    door.position.set(0.2, 1.1, 11.4);
+    group.add(door);
+    cyl(lit, "#8d8a84", 0.12, 0.12, 2.2, 0.2, 1.1, 11.4, 8);
+    box(lit, "#2f6f4e", 0.45, 0.5, 0.45, -7.2, 0.35, 4.2);
+    box(lit, "#2f6f4e", 0.4, 0.45, 0.4, 7.4, 0.32, 3.2);
+    box(lit, "#c4554a", 1.6, 0.32, 0.6, 3.2, 0.28, 8.8);
+    block(2.3, 8.45, 4.1, 9.15);
+    box(lit, "#e7d3b4", 6, 0.02, 3.2, 0.4, 0.08, 2.2);
+    [-6.2, -4.4, 4.6, 6.4].forEach((x) => {
+      box(lit, "#2c313a", 0.46, 0.08, 0.46, x, 0.42, 1.4);
+      box(lit, "#8d5a3a", 0.08, 0.36, 0.08, x, 0.2, 1.4);
+    });
+    box(lit, "#1c1612", 2.4, 1.15, 0.06, -6.5, 1.4, 0.2);
+    box(glow, "#3ddecb", 2.1, 0.03, 0.02, -6.5, 1.95, 0.24);
+    box(lit, "#5c3b2a", 1.2, 0.7, 0.4, 6.8, 0.4, 6.4);
+    block(6.2, 6.15, 7.4, 6.7);
+  } else if (sales) {
     box(lit, "#f6f1e8", 14.8, 0.04, 5, -2.4, 0.1, 10.55);
     // Client lounge.
     box(lit, "#e15b4a", 0.75, 0.34, 2.6, -8.45, 0.3, 2.4);
@@ -284,7 +331,18 @@ function buildKind(kind) {
     box(lit, "#2f6f4e", 0.45, 0.4, 0.45, -8.2, 0.3, 5.2);
     box(lit, "#3d7a32", 0.55, 0.35, 0.55, 8.3, 0.28, -2.2);
     box(lit, "#6b4a32", 0.5, 0.7, 0.5, -6.5, 0.4, 10.4);
+    box(lit, "#1c1612", 2.2, 0.9, 0.08, -6.4, 1.5, -7.75);
+    box(glow, "#ffb15a", 1.8, 0.04, 0.02, -6.4, 1.9, -7.7);
   }
+
+  // Shared richness so every floor reads as furnished from above.
+  [-8.2, -6.4, 6.8, 8.1].forEach((x, i) => {
+    box(lit, "#2f6f4e", 0.32, 0.4 + (i % 2) * 0.15, 0.32, x, 0.28, -5.5 + (i % 3));
+  });
+  box(lit, "#5c3b2a", 18, 0.06, 0.08, 0, 0.08, -7.6);
+  box(lit, "#5c3b2a", 0.08, 0.06, 16, -9.7, 0.08, 2);
+  box(glow, accent, 10, 0.025, 0.025, 2, 2.32, 4);
+  box(lit, "#e7d3b4", 2.2, 0.02, 1.4, -3, 0.07, 5.5);
 
   const litMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
@@ -333,20 +391,20 @@ function buildKind(kind) {
     group.add(leds);
   }
 
-  const buttons = elevatorButtons(group, 12.92);
-  const stations = sales
+  const buttons = elevatorButtons(group, 12.92).concat(directory);
+  const stations = lobby
+    ? { texts: { x: -1.6, z: 7.2, face: Math.PI, pose: "sit" } }
+    : sales
     ? {
       "opportunity-scout": { x: -5.4, z: 4.25, face: Math.PI, pose: "sit" },
       "personal-shopper": { x: -2.4, z: 4.25, face: Math.PI, pose: "sit" },
-      "money-manager": { x: 0.2, z: -6.55, face: 0, pose: "present" },
     }
     : lab
       ? {
         "business-lab": { x: -6.2, z: 3.15, face: Math.PI, pose: "sit" },
-        "content-coach": { x: -3.2, z: 3.15, face: Math.PI, pose: "sit" },
         "goal-tracker": { x: 7.6, z: -5.7, face: Math.PI, pose: "present" },
       }
-      : {};
+      : { "money-manager": { x: -1.2, z: -3.2, face: Math.PI, pose: "sit" } };
 
   function pointBlocked(x, z) {
     if (x < -9.6 || x > 9.6 || z < -7.6 || z > 12.7) return "edge";
@@ -364,6 +422,7 @@ function buildKind(kind) {
       live.tex.needsUpdate = true;
     }
     if (arm) arm.rotation.y = Math.sin(time * 0.7) * 0.6;
+    if (door) door.rotation.y = time * 0.4;
     if (leds) {
       const on = Math.sin(time * 5) > -0.2;
       leds.material.color.set(on ? 0x9af6ff : 0x1a3a44);
@@ -371,7 +430,7 @@ function buildKind(kind) {
   }
 
   return {
-    id: sales ? 41 : lab ? 43 : 44,
+    id: lobby ? 0 : sales ? 41 : lab ? 43 : 44,
     group: group,
     glowMat: glowMat,
     gloss: gloss,
@@ -426,15 +485,17 @@ function exteriorCore(scene) {
 }
 
 export function buildExtraFloors(scene) {
+  const lobby = buildKind("lobby");
   const sales = buildKind("sales");
   const lab = buildKind("lab");
   const pent = buildKind("pent");
-  scene.add(sales.group, lab.group, pent.group);
+  scene.add(lobby.group, sales.group, lab.group, pent.group);
   const coreMat = exteriorCore(scene);
-  const byId = { 41: sales, 43: lab, 44: pent };
-  const glosses = [sales.gloss, lab.gloss, pent.gloss];
+  const byId = { 0: lobby, 41: sales, 43: lab, 44: pent };
+  const glosses = [lobby.gloss, sales.gloss, lab.gloss, pent.gloss];
 
   function show(id) {
+    lobby.group.visible = id === 0;
     sales.group.visible = id === 41;
     lab.group.visible = id === 43;
     pent.group.visible = id === 44;
@@ -442,6 +503,7 @@ export function buildExtraFloors(scene) {
 
   function setNight(amount) {
     const k = amount === true ? 1 : amount === false ? 0 : amount;
+    lobby.glowMat.color.setRGB(1 + k * 0.9, 1 + k * 0.55, 1 + k * 0.2);
     sales.glowMat.color.setRGB(1 + k * 0.4, 1 + k * 0.9, 1 + k * 0.7);
     lab.glowMat.color.setRGB(1 + k * 0.2, 1 + k * 0.5, 1 + k * 0.8);
     pent.glowMat.color.setRGB(1 + k * 0.9, 1 + k * 0.5, 1 + k * 0.15);
@@ -457,6 +519,7 @@ export function buildExtraFloors(scene) {
   }
 
   function update(time) {
+    lobby.update(time);
     sales.update(time);
     lab.update(time);
     pent.update(time);
@@ -469,6 +532,6 @@ export function buildExtraFloors(scene) {
     setQuality: setQuality,
     update: update,
     glosses: glosses,
-    buttons: sales.elevatorButtons.concat(lab.elevatorButtons, pent.elevatorButtons),
+    buttons: lobby.elevatorButtons.concat(sales.elevatorButtons, lab.elevatorButtons, pent.elevatorButtons),
   };
 }

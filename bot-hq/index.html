@@ -50,6 +50,7 @@
       <p class="sub"><span id="floor-count">Nine bots</span><span id="updated"></span></p>
     </div>
     <div class="floor-switch" id="floor-switch" role="group" aria-label="Elevator">
+      <button type="button" data-floor="0">G</button>
       <button type="button" data-floor="44">PH</button>
       <button type="button" data-floor="43">43</button>
       <button type="button" data-floor="42" aria-pressed="true">42</button>
@@ -62,6 +63,7 @@
       <div id="hud-menu" class="hud-menu" hidden>
         <button type="button" id="btn-tour" aria-pressed="false">Tour</button>
         <button type="button" id="btn-bird" aria-pressed="false">Bird's-eye</button>
+        <button type="button" id="btn-walk" aria-pressed="false">Walk</button>
         <button type="button" id="btn-ceo" aria-pressed="false">Play as CEO</button>
         <button type="button" id="btn-ceo-exit" hidden>Exit</button>
         <button type="button" id="btn-reset">Reset view</button>
@@ -73,6 +75,24 @@
       </div>
     </div>
   </header>
+  <div id="help" class="help" hidden>
+    <div class="help-card">
+      <h2>Controls</h2>
+      <ul class="help-desk">
+        <li>WASD or arrows move in Walk and Play as CEO</li>
+        <li>Drag to look, scroll to zoom</li>
+        <li>0 or G lobby, 1 sales, 2 HQ, 3 lab, 4 or P penthouse</li>
+        <li>? or H shows this card again</li>
+      </ul>
+      <ul class="help-phone">
+        <li>Joystick walks in Walk and Play as CEO</li>
+        <li>Tap the floor to move, pinch to zoom</li>
+        <li>Floor buttons and the lobby directory ride the elevator</li>
+        <li>Menu holds Tour, Bird's-eye, and sound</li>
+      </ul>
+      <button type="button" id="help-close">Got it</button>
+    </div>
+  </div>
   <p id="hint" class="hint">Drag to look · pinch or scroll to zoom · tap a bot</p>
   <p id="intro-skip" class="hint intro-skip" hidden>Tap to skip</p>
   <p id="elevator-card" class="elevator-card" hidden>Floor 42</p>
