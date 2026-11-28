@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <title>Deep Sea Dive</title>
+  <meta name="description" content="Pilot a mini submarine down a trench and find glowing artifacts. A fictional game by Luke Diepenhorst.">
+  <link rel="stylesheet" href="sea.css">
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <div id="view"></div>
+  <div id="hud">
+    <p id="depth">Depth 0 m</p>
+    <p id="found">Found 0 / 5</p>
+  </div>
+  <div id="title" class="panel">
+    <h1>Deep Sea Dive</h1>
+    <p>Pilot the sub down the trench. The water gets darker as you dive. Find five artifacts.</p>
+    <button type="button" id="play">Play</button>
+    <p id="controls-note"></p>
+  </div>
+  <div id="end" class="panel" hidden>
+    <h2>Trove complete</h2>
+    <p id="end-copy"></p>
+    <button type="button" id="replay">Dive again</button>
+  </div>
+  <button type="button" id="mute" aria-pressed="true">Sound off</button>
+  <div id="stick" hidden><div id="knob"></div></div>
+  <button type="button" id="lamp" hidden>Lamp</button>
+  <footer>Built by Luke Diepenhorst</footer>
+  <script type="module" src="sea.js"></script>
+</body>
+</html>

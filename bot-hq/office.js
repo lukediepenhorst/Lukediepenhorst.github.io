@@ -1549,7 +1549,25 @@ export function buildOffice(scene, bots, options) {
   eg.fillText(BRAND.name, 130, 62);
   eg.fillStyle = BRAND.colors.amber;
   eg.font = "500 22px sans-serif";
-  eg.fillText("Floor " + BRAND.floor, 130, 98);
+  eg.fillText("Diepenhorst Tower", 130, 98);
+  const owned = document.createElement("canvas");
+  owned.width = 512;
+  owned.height = 96;
+  const og = owned.getContext("2d");
+  og.fillStyle = "#1c1612";
+  og.fillRect(0, 0, 512, 96);
+  og.fillStyle = "#ffb15a";
+  og.font = "700 28px sans-serif";
+  og.fillText("Owned by Luke Diepenhorst", 24, 58);
+  const ownedTex = new THREE.CanvasTexture(owned);
+  ownedTex.colorSpace = THREE.SRGBColorSpace;
+  const ownedSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(4.6, 0.7),
+    new THREE.MeshBasicMaterial({ map: ownedTex, side: THREE.DoubleSide })
+  );
+  ownedSign.position.set(0.05, 2.55, LZ + 0.4);
+  ownedSign.raycast = function () {};
+  scene.add(ownedSign);
   const exteriorTex = new THREE.CanvasTexture(exterior);
   exteriorTex.colorSpace = THREE.SRGBColorSpace;
   const exteriorSign = new THREE.Mesh(
@@ -1586,7 +1604,7 @@ export function buildOffice(scene, bots, options) {
   // Three clickable floor buttons beside the elevator. Only this floor's
   // panel is pickable while Floor 42 is showing.
   const elevatorButtons = [];
-  [44, 43, 42, 41].forEach((level, i) => {
+  [44, 43, 42, 41, 0].forEach((level, i) => {
     const button = new THREE.Mesh(
       new THREE.BoxGeometry(0.34, 0.2, 0.04),
       new THREE.MeshBasicMaterial({ color: level === 42 ? 0xffb15a : 0x24303c })

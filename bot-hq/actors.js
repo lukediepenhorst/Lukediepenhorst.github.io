@@ -35,15 +35,15 @@ const SIT = {
 const PAPER = new THREE.Color("#e7cb8c");
 
 const HOME_FLOOR = {
+  texts: 0,
   "opportunity-scout": 41,
   "personal-shopper": 41,
-  "money-manager": 41,
   "chief-of-staff": 42,
   "inbox-manager": 42,
-  texts: 42,
+  "content-coach": 42,
   "business-lab": 43,
-  "content-coach": 43,
   "goal-tracker": 43,
+  "money-manager": 44,
 };
 
 function turnToward(current, target, dt) {
